@@ -97,21 +97,30 @@ export function attachInput(buffer, target, hooks = {}) {
   const getNow = hooks.getNow ?? (() => performance.now());
   const allowPointer = hooks.allowPointer ?? (() => true);
 
+  const mods = (event) => ({
+    shift: Boolean(event.shiftKey),
+    alt: Boolean(event.altKey),
+    ctrl: Boolean(event.ctrlKey),
+  });
   const onKeyDown = (event) => {
     if (event.repeat) return;
+    if (event.code === 'AltLeft' || event.code === 'AltRight') event.preventDefault();
     buffer.record({
       kind: 'key',
       code: event.code,
       pressed: true,
       time: getNow(),
+      ...mods(event),
     });
   };
   const onKeyUp = (event) => {
+    if (event.code === 'AltLeft' || event.code === 'AltRight') event.preventDefault();
     buffer.record({
       kind: 'key',
       code: event.code,
       pressed: false,
       time: getNow(),
+      ...mods(event),
     });
   };
   const onMouseDown = (event) => {
@@ -120,6 +129,7 @@ export function attachInput(buffer, target, hooks = {}) {
       button: event.button,
       pressed: true,
       time: getNow(),
+      ...mods(event),
     });
   };
   const onMouseUp = (event) => {
@@ -128,6 +138,17 @@ export function attachInput(buffer, target, hooks = {}) {
       button: event.button,
       pressed: false,
       time: getNow(),
+      ...mods(event),
+    });
+  };
+  const onContext = (event) => {
+    event.preventDefault();
+    buffer.record({
+      kind: 'contextmenu',
+      button: 2,
+      pressed: true,
+      time: getNow(),
+      ...mods(event),
     });
   };
   const onMouseMove = (event) => {
@@ -146,6 +167,7 @@ export function attachInput(buffer, target, hooks = {}) {
   target.addEventListener('mousedown', onMouseDown);
   target.addEventListener('mouseup', onMouseUp);
   target.addEventListener('mousemove', onMouseMove);
+  target.addEventListener('contextmenu', onContext);
 
   return () => {
     target.removeEventListener('keydown', onKeyDown);
@@ -153,6 +175,7 @@ export function attachInput(buffer, target, hooks = {}) {
     target.removeEventListener('mousedown', onMouseDown);
     target.removeEventListener('mouseup', onMouseUp);
     target.removeEventListener('mousemove', onMouseMove);
+    target.removeEventListener('contextmenu', onContext);
   };
 }
 

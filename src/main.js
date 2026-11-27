@@ -2,12 +2,13 @@ import * as THREE from 'three';
 import { BUILD_ID } from './core/build.js';
 import { checkpoint } from './core/checkpoint.js';
 import { loadDialogue, t } from './core/dialogue.js';
+import { CONTROL_LINES } from './config/keymap.js';
 import { attachInput, createInputBuffer, pointerDelta } from './core/input.js';
 import { createLoop } from './core/loop.js';
 import { createSettingsStore } from './core/settings.js';
 import { createPerfOverlay } from './debug/perf.js';
 import { loadRapier } from './physics/world.js';
-import { createGraybox } from './scenes/graybox.js';
+import { createRoute } from './scenes/route.js';
 import { createStressScene } from './scenes/stress.js';
 import { createMenus } from './ui/menus.js';
 import './style.css';
@@ -15,6 +16,8 @@ import './style.css';
 const params = new URLSearchParams(location.search);
 const perfEnabled = params.get('perf') === '1';
 const stressEnabled = params.get('stress') === '1';
+const camDebug = params.get('cam') === 'debug';
+const inputDebug = params.get('input') === '1';
 
 const canvas = document.querySelector('#view');
 const ui = document.querySelector('#ui');
@@ -31,6 +34,7 @@ let renderer = null;
 let sceneApi = null;
 let booting = false;
 let lastStepMs = 0;
+let lastEvents = [];
 
 const perf = perfEnabled
   ? createPerfOverlay(document.querySelector('#perf'), { buildId: BUILD_ID })
@@ -50,10 +54,12 @@ const loop = createLoop({
   },
   onStep(dtMs, stepEnd) {
     const events = input.consumeUpTo(stepEnd);
+    lastEvents = events;
     if (!sceneApi) return 0;
     return sceneApi.step(dtMs, {
       input,
       settings: settings.get(),
+      events,
       pointer: pointerDelta(events),
     });
   },
@@ -72,6 +78,21 @@ const loop = createLoop({
         scene: sceneApi.name,
       });
     }
+    const cam = document.querySelector('#cam-readout');
+    if (cam) {
+      cam.hidden = !camDebug;
+      cam.textContent = camDebug ? (sceneApi.cameraName || '') : '';
+    }
+    const prompt = document.querySelector('#prompt');
+    if (prompt) {
+      const text = sceneApi.prompt || '';
+      prompt.hidden = !text;
+      prompt.textContent = text;
+    }
+    const action = document.querySelector('#action-readout');
+    if (action) action.textContent = sceneApi.actionText || '';
+    if (inputDebug) paintInput(lastEvents);
+    lastEvents = [];
   },
 });
 
@@ -113,7 +134,6 @@ function setMode(next) {
   if (next === 'pause') {
     menus.showPause();
     sceneApi?.setDimmed(true);
-    if (document.pointerLockElement) document.exitPointerLock();
     return;
   }
   menus.hide();
@@ -128,7 +148,7 @@ async function play() {
     const R = await loadRapier();
     ensureRenderer();
     sceneApi?.dispose();
-    sceneApi = stressEnabled ? createStressScene(R) : createGraybox(R);
+    sceneApi = stressEnabled ? createStressScene(R) : createRoute(R, { camDebug });
     applySize();
     checkpoint.save(sceneApi.captureState());
     setMode('play');
@@ -168,10 +188,13 @@ function quit() {
   setMode('menu');
 }
 
+const creditEntries = [];
 const menus = createMenus(ui, {
   settings,
   t,
   buildId: BUILD_ID,
+  controls: CONTROL_LINES,
+  credits: creditEntries,
   onPlay: () => { play(); },
   onResume: resume,
   onRestart: restart,
@@ -197,17 +220,38 @@ document.addEventListener('visibilitychange', () => {
   if (document.hidden && mode === 'play') pause();
 });
 
-canvas.addEventListener('click', () => {
-  if (mode !== 'play') return;
-  canvas.requestPointerLock?.();
-});
+canvas.addEventListener('contextmenu', (event) => event.preventDefault());
+
+const inputLog = [];
+function paintInput(events) {
+  const node = document.querySelector('#input-log');
+  if (!node) return;
+  for (const event of events) {
+    inputLog.push(event.kind === 'key'
+      ? `${event.code} ${event.pressed ? 'down' : 'up'} shift=${event.shift} alt=${event.alt}`
+      : `${event.kind} btn=${event.button} alt=${event.alt}`);
+  }
+  while (inputLog.length > 8) inputLog.shift();
+  const charge = sceneApi?.chargeLevel ? sceneApi.chargeLevel() : 0;
+  node.hidden = false;
+  node.textContent = `charge ${charge.toFixed(2)}\n${inputLog.join('\n')}`;
+}
 
 window.__EOT__ = {
   buildId: BUILD_ID,
   mode: () => mode,
   pose: () => sceneApi?.captureState() ?? null,
+  place: (position) => sceneApi?.place?.(position),
+  cameraName: () => sceneApi?.cameraName ?? '',
   perfReport: () => perf?.report() ?? null,
 };
+
+fetch(`${import.meta.env.BASE_URL}data/credits.json`)
+  .then((response) => response.json())
+  .then((data) => {
+    creditEntries.splice(0, creditEntries.length, ...(Array.isArray(data?.entries) ? data.entries : []));
+  })
+  .catch((error) => console.error(error));
 
 loadDialogue(`${import.meta.env.BASE_URL}data/dialogue.json`)
   .catch((error) => {

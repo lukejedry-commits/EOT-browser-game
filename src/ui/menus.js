@@ -17,7 +17,7 @@ function volumeLabel(value) {
   return `${Math.round(Number(value) * 100)}%`;
 }
 
-export function createMenus(root, { settings, t, buildId, onPlay, onResume, onRestart, onQuit }) {
+export function createMenus(root, { settings, t, buildId, controls = [], credits = [], onPlay, onResume, onRestart, onQuit }) {
   let screen = 'main';
   let settingsReturn = 'main';
   let statusText = '';
@@ -83,13 +83,24 @@ export function createMenus(root, { settings, t, buildId, onPlay, onResume, onRe
         <label class="check">Camera shake
           <input type="checkbox" name="cameraShake" ${shake}>
         </label>
-        <label>Render scale
-          <select name="renderScale">
-            ${[0.5, 0.75, 1].map((scale) => `
-              <option value="${scale}" ${current.renderScale === scale ? 'selected' : ''}>${scale.toFixed(2)}</option>
+        <label>Quality
+          <select name="quality">
+            ${['low', 'medium', 'high'].map((quality) => `
+              <option value="${quality}" ${current.quality === quality ? 'selected' : ''}>${quality}</option>
             `).join('')}
           </select>
         </label>
+        <details class="advanced">
+          <summary>Advanced</summary>
+          <label>Render scale
+            <select name="renderScale">
+              ${[0.5, 0.75, 1].map((scale) => `
+                <option value="${scale}" ${current.renderScale === scale ? 'selected' : ''}>${scale.toFixed(2)}</option>
+              `).join('')}
+            </select>
+          </label>
+          <p class="fine">Low defaults to 0.75. Medium and High default to 1.0.</p>
+        </details>
         <button type="button" class="menu" data-action="back">Back</button>
       </form>
     `;
@@ -109,10 +120,11 @@ export function createMenus(root, { settings, t, buildId, onPlay, onResume, onRe
       const device = settings.get().inputDevice;
       body = `
         <h1>Ember Over Tide</h1>
-        <p class="sub">M0 test build</p>
+        <p class="sub">M1 graybox</p>
         <div class="menu-actions">
           <button type="button" class="menu" data-action="play">Play</button>
           <button type="button" class="menu" data-action="settings">Settings</button>
+          <button type="button" class="menu" data-action="controls">Controls</button>
           <button type="button" class="menu" data-action="credits">Credits</button>
         </div>
         <fieldset>
@@ -131,10 +143,27 @@ export function createMenus(root, { settings, t, buildId, onPlay, onResume, onRe
         <p class="fine">Safe to change mid-game. Saved on this browser.</p>
         ${settingsFields()}
       `;
+    } else if (screen === 'controls') {
+      body = `
+        <h2>Controls</h2>
+        <ul class="credits">
+          ${controls.map(([label, keys]) => `<li><span>${escapeHtml(label)}</span> ${escapeHtml(keys)}</li>`).join('')}
+        </ul>
+        <button type="button" class="menu" data-action="back">Back</button>
+      `;
     } else if (screen === 'credits') {
+      const items = credits.length ? credits : [];
       body = `
         <h2>Credits</h2>
-        <p>${escapeHtml(t('credits.body'))}</p>
+        <ul class="credits">
+          ${items.map((item) => `
+            <li>
+              <span>${escapeHtml(item.name)}</span>
+              ${escapeHtml(item.creator)} · ${escapeHtml(item.license)} · ${escapeHtml(item.status || '')}
+              <br><a href="${escapeHtml(item.source)}" target="_blank" rel="noreferrer">${escapeHtml(item.source)}</a>
+            </li>
+          `).join('') || '<li>No credits loaded.</li>'}
+        </ul>
         <button type="button" class="menu" data-action="back">Back</button>
       `;
     } else if (screen === 'pause') {
@@ -155,16 +184,23 @@ export function createMenus(root, { settings, t, buildId, onPlay, onResume, onRe
     syncPadTimer();
   }
 
-  function commitForm(form) {
+  function commitForm(form, eventTarget) {
     if (!form?.dataset.settings) return;
+    const quality = form.elements.quality.value;
+    let renderScale = Number(form.elements.renderScale.value);
+    if (eventTarget?.name === 'quality') {
+      renderScale = quality === 'low' ? 0.75 : 1;
+      form.elements.renderScale.value = String(renderScale);
+    }
     settings.update({
       fpsCap: Number(form.elements.fpsCap.value),
+      quality,
       master: Number(form.elements.master.value),
       music: Number(form.elements.music.value),
       sfx: Number(form.elements.sfx.value),
       mouseSensitivity: Number(form.elements.mouseSensitivity.value),
       cameraShake: form.elements.cameraShake.checked,
-      renderScale: Number(form.elements.renderScale.value),
+      renderScale,
     });
     for (const range of form.querySelectorAll('input[type="range"]')) {
       const out = form.querySelector(`[data-for="${range.name}"]`);
@@ -178,7 +214,7 @@ export function createMenus(root, { settings, t, buildId, onPlay, onResume, onRe
   root.addEventListener('submit', (event) => event.preventDefault());
   root.addEventListener('input', (event) => {
     const form = event.target?.form;
-    if (form) commitForm(form);
+    if (form) commitForm(form, event.target);
   });
   root.addEventListener('change', (event) => {
     const target = event.target;
@@ -186,7 +222,7 @@ export function createMenus(root, { settings, t, buildId, onPlay, onResume, onRe
       settings.update({ inputDevice: target.value === 'gamepad' ? 'gamepad' : 'keyboard' });
       return;
     }
-    if (target?.form) commitForm(target.form);
+    if (target?.form) commitForm(target.form, target);
   });
   root.addEventListener('click', (event) => {
     const action = event.target?.closest?.('[data-action]')?.dataset.action;
@@ -195,6 +231,10 @@ export function createMenus(root, { settings, t, buildId, onPlay, onResume, onRe
     else if (action === 'settings') {
       settingsReturn = screen === 'pause' ? 'pause' : 'main';
       screen = 'settings';
+      render();
+    } else if (action === 'controls') {
+      settingsReturn = 'main';
+      screen = 'controls';
       render();
     } else if (action === 'credits') {
       settingsReturn = 'main';

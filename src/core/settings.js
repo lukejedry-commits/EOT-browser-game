@@ -2,6 +2,15 @@ export const STORAGE_KEY = 'eot.settings.v1';
 
 export const FPS_CAPS = [30, 60];
 export const RENDER_SCALES = [0.5, 0.75, 1];
+export const QUALITIES = ['low', 'medium', 'high'];
+
+export function defaultQuality(nav) {
+  return isWeakHardware(nav) ? 'low' : 'medium';
+}
+
+export function renderScaleForQuality(quality) {
+  return quality === 'low' ? 0.75 : 1;
+}
 
 /**
  * Weak-hardware rule (M0, written for Validation).
@@ -47,10 +56,14 @@ function clamp(n, min, max, fallback) {
 
 export function sanitizeSettings(raw, hardware) {
   const fpsCap = raw?.fpsCap === 30 || raw?.fpsCap === 60 ? raw.fpsCap : defaultFpsCap(hardware);
+  const quality = QUALITIES.includes(raw?.quality) ? raw.quality : defaultQuality(hardware);
   const requestedScale = Number(raw?.renderScale);
-  const renderScale = RENDER_SCALES.includes(requestedScale) ? requestedScale : 1;
+  const renderScale = RENDER_SCALES.includes(requestedScale)
+    ? requestedScale
+    : renderScaleForQuality(quality);
   return {
     fpsCap,
+    quality,
     master: clamp(raw?.master, 0, 1, 1),
     music: clamp(raw?.music, 0, 1, 1),
     sfx: clamp(raw?.sfx, 0, 1, 1),

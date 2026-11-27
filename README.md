@@ -1,8 +1,8 @@
 # Ember Over Tide
 
-God of War (2005)-style third-person browser slice. This repo is at milestone **M0**: menus, a fixed-step loop, a Rapier graybox, and a perf scene. No combat yet.
+God of War (2005)-style third-person browser slice. This repo is at milestone **M1**: a graybox of the slice route, Korrath's controller, and fixed camera zones. Combat damage is still a stub.
 
-`BUILD_ID` is `m0-1`. It is drawn in the corner and on the main menu.
+`BUILD_ID` is `m1-1`. It is drawn in the corner and on the main menu.
 
 ## Run
 
@@ -25,14 +25,22 @@ GitHub Actions runs the tests and the build on every pull request. A push to `ma
 
 ## Controls
 
-- **WASD** or arrow keys move the capsule. Movement is camera-relative.
-- **Click** the view to look around. Mouse sensitivity is in Settings.
-- **P** pauses. The pause menu is Resume, Settings, Restart, Quit.
-- Leaving the tab pauses. Coming back stays paused until Resume.
-- **Restart** restores the checkpoint saved when Play started (player pose; later HP, MP, upgrades, and puzzle state). It does not reload the page.
-- **Quit** returns to the main menu.
+The camera is fixed. The mouse does not orbit it.
 
-The input device switch (keyboard + mouse, or gamepad) is on the main menu only. Gamepad support is a placeholder: when Gamepad is selected, the left stick moves the capsule. The combat button layout is not in this milestone. WASD still works in either mode.
+- **WASD** moves relative to the active camera. A cut keeps the old direction until you release the keys or change direction.
+- **Space** jumps. A second press in the air is the double jump.
+- **Tap Left Shift** (release within 0.25 s, with nothing else pressed) toggles crouch. A longer hold charges a heavy.
+- **Left Shift + left mouse** releases the charged heavy. Charge time is how long Shift was held. Tiers are under 0.3 s, 0.3–0.8 s, and 0.8–1.4 s (then it holds at max). While charging, move speed is halved and block is unavailable. Shift+Space, right mouse, or a hit cancels it.
+- **Right mouse** tap parries, hold blocks.
+- **Left Shift + Space** dodge-rolls. The hurtbox drops to crouch height for the roll.
+- **R** Ember Wrath, **F** grab / interact, **P** pause. E and Q are unbound. Ctrl and Alt are not bound.
+- Leaving the tab pauses. Coming back stays paused until Resume.
+
+The same list is on the Controls screen. `?input=1` logs raw events and the charge level. Optional `altHeavy` in `src/config/keymap.js` also treats Alt+click as heavy; it is off, and plain right mouse always blocks.
+
+## Assets
+
+M1 does not download art. Planned CC0 sources are in `CREDITS.md` and `public/data/credits.json` (`status: "planned"` vs `"in build"`). Mixamo clips must be baked into the character GLBs. Do not ship a raw animation folder. When breakables arrive, Tide Gate rubble breaks at any heavy charge level.
 
 ## Settings
 
@@ -47,12 +55,14 @@ On a first visit, with nothing saved:
 
 Choosing a cap overrides that and survives a reload. The rule is in `src/core/settings.js` (`isWeakHardware`).
 
-Render scale options are `0.50`, `0.75`, and `1.00`. It is the WebGL pixel ratio, not multiplied by `devicePixelRatio`, so 1.0 is one rendering pixel per CSS pixel.
+Quality is Low, Medium, or High. Render scale lives under Advanced and stays `0.50`, `0.75`, or `1.00`. Low defaults to 0.75. Medium and High default to 1.0. It is the WebGL pixel ratio, not multiplied by `devicePixelRatio`.
 
 ## Perf flags
 
 - `?perf=1` shows fps, frame ms, physics step ms, draw calls, triangles, and JS heap when the browser exposes it, plus a JSON blob stamped with the build id.
 - `?perf=1&stress=1` loads the stress scene instead of the graybox: about 50k triangles, 70 draw calls, 6 wandering capsule bodies, and 12 dynamic debris boxes.
+- `?cam=debug` draws the camera zones and the active camera name.
+- `?input=1` logs key and mouse events plus the heavy charge level.
 
 Example: [http://localhost:5173/EOT-browser-game/?perf=1&stress=1](http://localhost:5173/EOT-browser-game/?perf=1&stress=1)
 

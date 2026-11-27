@@ -10,7 +10,8 @@ import {
   stepCharacter,
   teleportBody,
 } from '../physics/world.js';
-import { cameraRelativeVelocity, createFollowCamera, readMoveAxes } from './follow.js';
+import { basisFromLook, velocityFromBasis } from '../camera/basis.js';
+import { axisFromKeys } from '../config/keymap.js';
 import { createLights, createTracker, disposeResources } from './track.js';
 
 /**
@@ -113,7 +114,9 @@ export function createStressScene(R) {
   const playerTrack = tracker.add(playerMesh, player.body);
 
   const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 200);
-  const follow = createFollowCamera(camera);
+  camera.position.set(0, 8, 18);
+  camera.lookAt(0, 1, -2);
+  const basis = basisFromLook(camera.position, { x: 0, y: 1, z: -2 });
   const scratch = { x: 0, y: 0, z: 0 };
   let elapsedMs = 0;
   let disposed = false;
@@ -122,7 +125,7 @@ export function createStressScene(R) {
     return {
       scene: 'stress',
       player: readTranslation(player.body),
-      yaw: follow.yaw,
+      yaw: 0,
       enemies: enemies.map((enemy) => readTranslation(enemy.actor.body)),
       debris: debris.map((piece) => readTranslation(piece.body)),
     };
@@ -141,8 +144,6 @@ export function createStressScene(R) {
     elapsedMs = 0;
     const playerPos = state?.player ?? PLAYER_SPAWN;
     placeCharacter(player, playerTrack, playerPos);
-    follow.reset();
-    follow.yaw = state?.yaw ?? 0;
     enemies.forEach((enemy, index) => {
       placeCharacter(enemy.actor, enemy.track, state?.enemies?.[index] ?? enemy.spawn);
     });
@@ -161,9 +162,8 @@ export function createStressScene(R) {
     step(dtMs, ctx) {
       const dt = dtMs / 1000;
       elapsedMs += dtMs;
-      const axes = readMoveAxes(ctx.input, ctx.settings);
-      follow.addPointer(ctx.pointer.dx, ctx.settings.mouseSensitivity);
-      const velocity = cameraRelativeVelocity(follow.yaw, axes.fwd, axes.strafe);
+      const axes = axisFromKeys(ctx.input);
+      const velocity = velocityFromBasis(basis, axes, 5.5);
       const t0 = performance.now();
       stepCharacter(player, velocity.x, velocity.z, dt);
       for (let i = 0; i < enemies.length; i++) {
@@ -187,7 +187,6 @@ export function createStressScene(R) {
     present(alpha, frameDtMs, paused) {
       if (paused) return;
       tracker.apply(alpha);
-      follow.update(playerMesh.position, frameDtMs / 1000);
     },
     captureState,
     restoreState,
