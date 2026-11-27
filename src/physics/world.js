@@ -84,9 +84,15 @@ export function createCharacter(R, world, position, opts = {}) {
   };
 }
 
-/** Move a kinematic capsule. `dt` is the fixed step in seconds. */
-export function stepCharacter(actor, vx, vz, dt) {
-  actor.vy = Math.max(MAX_FALL_SPEED, actor.vy + GRAVITY_Y * dt);
+/**
+ * Move a kinematic capsule. `dt` is seconds.
+ * Pass `{ integrateGravity: false }` when a motor already set `actor.vy`.
+ */
+export function stepCharacter(actor, vx, vz, dt, options = {}) {
+  const integrate = options.integrateGravity !== false;
+  const gravity = options.gravity ?? GRAVITY_Y;
+  if (integrate) actor.vy = Math.max(MAX_FALL_SPEED, actor.vy + gravity * dt);
+  else actor.vy = Math.max(MAX_FALL_SPEED, actor.vy);
   actor.desired.x = vx * dt;
   actor.desired.y = actor.vy * dt;
   actor.desired.z = vz * dt;
@@ -100,7 +106,9 @@ export function stepCharacter(actor, vx, vz, dt) {
   actor.next.y = translation.y + my;
   actor.next.z = translation.z + mz;
   actor.body.setNextKinematicTranslation(actor.next);
-  if (actor.controller.computedGrounded() && actor.vy < 0) actor.vy = 0;
+  const grounded = actor.controller.computedGrounded();
+  if (grounded && actor.vy < 0) actor.vy = 0;
+  actor.grounded = grounded && actor.vy <= 0;
 }
 
 export function teleportBody(body, position, rotation) {

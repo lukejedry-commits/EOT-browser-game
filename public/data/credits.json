@@ -1,0 +1,25 @@
+{
+  "entries": [
+    {"name": "three.js", "creator": "mrdoob and contributors", "source": "https://github.com/mrdoob/three.js", "license": "MIT", "status": "in build", "kind": "software"},
+    {"name": "Rapier", "creator": "Dimforge", "source": "https://github.com/dimforge/rapier", "license": "Apache-2.0", "status": "in build", "kind": "software"},
+    {"name": "Vite", "creator": "VoidZero Inc. and contributors", "source": "https://vite.dev/", "license": "MIT", "status": "in build", "kind": "software"},
+    {"name": "Animated Man Pack", "creator": "Quaternius", "source": "https://quaternius.com/packs/animatedman.html", "license": "CC0 1.0", "status": "planned", "kind": "asset", "files": ["assets/models/korrath.glb", "assets/models/saph.glb", "assets/models/drowned_priest.glb", "assets/models/temple_guard.glb", "assets/models/diviner.glb"]},
+    {"name": "Animated Zombie Pack", "creator": "Quaternius", "source": "https://quaternius.com/packs/animatedzombie.html", "license": "CC0 1.0", "status": "planned", "kind": "asset", "files": ["assets/models/drowned_priest.glb"]},
+    {"name": "Modular Dungeons Pack", "creator": "Quaternius", "source": "https://quaternius.com/packs/modulardungeon.html", "license": "CC0 1.0", "status": "planned", "kind": "asset", "files": ["assets/models/temple_merged.glb", "assets/models/tide_gate.glb", "assets/models/pedestal.glb"]},
+    {"name": "Ultimate Modular Ruins Pack", "creator": "Quaternius", "source": "https://quaternius.com/packs/ultimatemodularruins.html", "license": "CC0 1.0", "status": "planned", "kind": "asset", "files": ["assets/models/temple_merged.glb"]},
+    {"name": "Modular Weapons Pack", "creator": "Quaternius", "source": "https://quaternius.com/packs/medievalweapons.html", "license": "CC0 1.0", "status": "planned", "kind": "asset", "files": ["assets/models/ember_glaive.glb", "assets/models/shield_round.glb"]},
+    {"name": "Column", "creator": "Quaternius", "source": "https://poly.pizza/m/wLubNpOTX4", "license": "CC0 1.0", "status": "planned", "kind": "asset", "files": ["assets/models/pillar.glb"]},
+    {"name": "Spear", "creator": "Quaternius", "source": "https://poly.pizza/m/fH1zmvjPNx", "license": "CC0 1.0", "status": "planned", "kind": "asset", "files": ["assets/models/ember_glaive.glb"]},
+    {"name": "Shield Round", "creator": "Quaternius", "source": "https://poly.pizza/m/lWajrVXcnA", "license": "CC0 1.0", "status": "planned", "kind": "asset", "files": ["assets/models/shield_round.glb"]},
+    {"name": "Bowl", "creator": "Quaternius", "source": "https://poly.pizza/m/cXIpPoXb1U", "license": "CC0 1.0", "status": "planned", "kind": "asset", "files": ["assets/models/brazier.glb"]},
+    {"name": "Torch", "creator": "Quaternius", "source": "https://poly.pizza/m/Gq38E7hFZw", "license": "CC0 1.0", "status": "planned", "kind": "asset", "files": ["assets/models/torch.glb"]},
+    {"name": "Rocks", "creator": "Quaternius", "source": "https://poly.pizza/m/fy3szRMvuE", "license": "CC0 1.0", "status": "planned", "kind": "asset", "files": ["assets/models/rubble.glb"]},
+    {"name": "Nature Kit", "creator": "Kenney", "source": "https://kenney.nl/assets/nature-kit", "license": "CC0", "status": "planned", "kind": "asset", "files": ["assets/models/rubble.glb"]},
+    {"name": "Particle Pack", "creator": "Kenney", "source": "https://kenney.nl/assets/particle-pack", "license": "CC0", "status": "planned", "kind": "asset", "files": ["assets/textures/particles.png"]},
+    {"name": "UI Pack", "creator": "Kenney", "source": "https://kenney.nl/assets/ui-pack", "license": "CC0", "status": "planned", "kind": "asset", "files": ["assets/ui/menu/"]},
+    {"name": "Game Icons", "creator": "Kenney", "source": "https://kenney.nl/assets/game-icons", "license": "CC0", "status": "planned", "kind": "asset", "files": ["assets/ui/icons/"]},
+    {"name": "Input Prompts", "creator": "Kenney", "source": "https://kenney.nl/assets/input-prompts", "license": "CC0", "status": "planned", "kind": "asset", "files": ["assets/ui/prompts/"]},
+    {"name": "Hand painted water texture", "creator": "PamNawi", "source": "https://opengameart.org/content/hand-painted-water-texture-waterripplelayerpng-0", "license": "CC0", "status": "planned", "kind": "asset", "files": ["assets/textures/water.png"]},
+    {"name": "Mixamo animations", "creator": "Adobe Mixamo", "source": "https://www.mixamo.com/", "license": "Mixamo royalty-free for video games", "status": "planned", "kind": "asset", "note": "Bake into character GLBs. Never ship a raw animation folder.", "files": ["assets/models/korrath.glb", "assets/models/saph.glb", "assets/models/drowned_priest.glb", "assets/models/temple_guard.glb", "assets/models/diviner.glb"]}
+  ]
+}

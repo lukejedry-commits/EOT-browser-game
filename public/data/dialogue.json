@@ -1,4 +1,23 @@
 {
-  "angel.cell.01": "placeholder",
-  "credits.body": "placeholder"
+  "cell_angel_01": "Rise, son of Abraham. The sea will not keep you.",
+  "cell_korrath_01": "...Then I will rise.",
+  "bark_wave_start": "Come, then.",
+  "bark_heavy_kill": "Down.",
+  "bark_hurt": "(grunt)",
+  "bark_low_hp": "Not here. Not like this.",
+  "bark_ember_wrath": "Burn!",
+  "bark_gate_crank": "Hold... hold...",
+  "bark_gate_wedged": "Let your god keep the door.",
+  "bark_qte_fail": "(roar)",
+  "bark_checkpoint": "",
+  "saph_intro_01": "A slave with a stolen blade. Dagon sends me small gifts.",
+  "saph_intro_02": "I broke kings at Gath. I will break you on this stone.",
+  "saph_p1_taunt": "Bleed for the crowd.",
+  "saph_fake_defeat": "...Is that all your blood can do?",
+  "saph_p2_rise": "The deep... does not let go.",
+  "saph_p2_taunt": "Drown with me.",
+  "saph_death_01": "You think you are free...?",
+  "saph_death_02": "That blade... it drank me. It drinks all of us.",
+  "saph_death_03": "One day it will drink you, little Hebrew.",
+  "lore_dagon_hands": "placeholder"
 }
