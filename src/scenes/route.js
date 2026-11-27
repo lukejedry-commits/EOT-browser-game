@@ -6,12 +6,22 @@ import { blendShots, railShot, selectZone } from '../camera/zones.js';
 import { KEYMAP, createActionResolver, axisFromKeys } from '../config/keymap.js';
 import { createSubtitleState, requestBark, stepHint, stepSubtitles } from '../config/subtitles.js';
 import { chargeGlow, createCombatClock } from '../config/combat.js';
+import {
+  BRAZIERS,
+  CORAL_WALL,
+  GATE_SOLVED_BURST,
+  MAIN_URNS,
+  OPTIONAL_URNS,
+  createWallet,
+  redOrbsForDrop,
+} from '../config/economy.js';
 import { LIGHTING } from '../config/lighting.js';
 import { MOVEMENT } from '../config/movement.js';
 import { t } from '../core/dialogue.js';
 import { sampleGamepadStick } from '../core/input.js';
 import { createAirPuff } from '../fx/puff.js';
 import { createEmberCloud } from '../fx/embers.js';
+import { createOrbPool } from '../fx/orbs.js';
 import {
   createCharacter,
   createFixedCuboid,
@@ -66,7 +76,7 @@ function quatX(angle) {
   return { x: Math.sin(angle / 2), y: 0, z: 0, w: Math.cos(angle / 2) };
 }
 
-export function createRoute(R, { camDebug = false, unlockedChargeTier = 1 } = {}) {
+export function createRoute(R, { camDebug = false, unlockedChargeTier = 1, startingOrbs = 0 } = {}) {
   const world = createWorld(R);
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(LIGHTING.background);
@@ -179,6 +189,58 @@ export function createRoute(R, { camDebug = false, unlockedChargeTier = 1 } = {}
   visual(0.35, 0.35, 0.35, LORE_POINT.x, LORE_POINT.y, LORE_POINT.z, 0xff7a1a);
   visual(0.55, 0.42, 0.48, LORE_POINT.x - 0.85, THRESHOLD_HEIGHT + 0.21, LORE_POINT.z, 0x6d675e);
 
+  const wallet = createWallet(startingOrbs);
+  const urns = [...MAIN_URNS, ...OPTIONAL_URNS].map((urn) => {
+    const mat = new THREE.MeshStandardMaterial({
+      color: 0x4c433c,
+      emissive: 0xff4a1a,
+      emissiveIntensity: urn.id === 'C' ? 0.12 : 0.35,
+      roughness: 1,
+      flatShading: true,
+    });
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.48, 0.36), mat);
+    mesh.position.set(urn.x, urn.y, urn.z);
+    mesh.name = `urn-${urn.id}`;
+    scene.add(mesh);
+    geometries.add(mesh.geometry);
+    materials.add(mat);
+    return { ...urn, mesh, mat, broken: false };
+  });
+  const braziers = BRAZIERS.map((brazier) => {
+    const bowl = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.4, 0.9), material(0x3c3834));
+    const fireMat = new THREE.MeshStandardMaterial({
+      color: 0xff7a1a,
+      emissive: 0xff7a1a,
+      emissiveIntensity: 0.9,
+      roughness: 1,
+      flatShading: true,
+    });
+    const fire = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.36, 0.28), fireMat);
+    bowl.position.set(brazier.x, brazier.y, brazier.z);
+    fire.position.set(brazier.x, brazier.y + 0.42, brazier.z);
+    bowl.name = `brazier-${brazier.id}`;
+    scene.add(bowl, fire);
+    geometries.add(bowl.geometry);
+    geometries.add(fire.geometry);
+    materials.add(fireMat);
+    return { ...brazier, fire };
+  });
+  const coralMat = new THREE.MeshLambertMaterial({ color: 0x6e4a3a, flatShading: true });
+  const coralMesh = new THREE.Mesh(new THREE.BoxGeometry(CORAL_WALL.w, CORAL_WALL.h, CORAL_WALL.d), coralMat);
+  coralMesh.position.set(CORAL_WALL.x, CORAL_WALL.y, CORAL_WALL.z);
+  coralMesh.name = 'coral-wall';
+  scene.add(coralMesh);
+  geometries.add(coralMesh.geometry);
+  materials.add(coralMat);
+  const coralBody = createFixedCuboid(
+    R,
+    world,
+    { x: CORAL_WALL.x, y: CORAL_WALL.y, z: CORAL_WALL.z },
+    { x: CORAL_WALL.w / 2, y: CORAL_WALL.h / 2, z: CORAL_WALL.d / 2 },
+  );
+  let coralBroken = false;
+  let gateRewarded = false;
+
   solid(1.4, 6, 1.4, -5, 3, 94, 0x3c434c);
   solid(1.4, 6, 1.4, 5, 3, 94, 0x3c434c);
   const saph = visual(2.4, SAPH_HEIGHT, 2.2, 0, SAPH_HEIGHT / 2, 98, 0x3fbf9a);
@@ -229,11 +291,14 @@ export function createRoute(R, { camDebug = false, unlockedChargeTier = 1 } = {}
   const playerTrack = tracker.add(figure, actor.body);
   const puff = createAirPuff();
   const cloud = createEmberCloud();
-  scene.add(puff.points, cloud.points);
+  const orbs = createOrbPool();
+  scene.add(puff.points, cloud.points, orbs.points);
   geometries.add(puff.points.geometry);
   geometries.add(cloud.points.geometry);
+  geometries.add(orbs.points.geometry);
   materials.add(puff.points.material);
   materials.add(cloud.points.material);
+  materials.add(orbs.points.material);
 
   const camera = new THREE.PerspectiveCamera(46, 16 / 9, 0.1, 140);
   const motor = createMotorState();
@@ -241,13 +306,46 @@ export function createRoute(R, { camDebug = false, unlockedChargeTier = 1 } = {}
     ? unlockedChargeTier
     : 1;
   const actions = createActionResolver(KEYMAP, () => motor.unlockedChargeTier);
-  const combat = createCombatClock();
+  const combat = createCombatClock(undefined, { lightCount: () => wallet.lightCount() });
   const vent = createVentState();
   const subtitles = createSubtitleState();
   let subtitle = { id: null, opacity: 0, light: 0 };
   let hintMoveMs = 0;
   let hintOpacity = 1;
   const debugLines = [];
+  let shopId = null;
+
+  function nearestBrazier(pos) {
+    let best = null;
+    let bestDist = 2.2;
+    for (const brazier of braziers) {
+      const dist = Math.hypot(pos.x - brazier.x, pos.z - brazier.z);
+      if (dist < bestDist && Math.abs(pos.y - brazier.y) < 2.4) {
+        best = brazier;
+        bestDist = dist;
+      }
+    }
+    return best;
+  }
+
+  function shatterUrns(pos, tier) {
+    for (const urn of urns) {
+      if (urn.broken) continue;
+      if (urn.id === 'C' && !coralBroken) continue;
+      const dist = Math.hypot(pos.x - urn.x, pos.z - urn.z);
+      if (dist > 1.8 || Math.abs(pos.y - urn.y) > 2.4) continue;
+      urn.broken = true;
+      urn.mat.emissiveIntensity = 0.05;
+      urn.mesh.scale.y = 0.3;
+      wallet.grant(urn.value);
+      orbs.burst({ x: urn.x, y: urn.y, z: urn.z }, 'soul', 6);
+    }
+    if (!coralBroken && tier >= 3 && Math.hypot(pos.x - CORAL_WALL.x, pos.z - CORAL_WALL.z) < 2.4) {
+      coralBroken = true;
+      coralMesh.visible = false;
+      world.removeRigidBody(coralBody);
+    }
+  }
   lights.setZone('cam_cell');
   let zoneId = 'cam_cell';
   let latch = null;
@@ -303,6 +401,7 @@ export function createRoute(R, { camDebug = false, unlockedChargeTier = 1 } = {}
     get prompt() {
       if (subtitle.id) return t(subtitle.id);
       const pos = readTranslation(actor.body);
+      if (!shopId && nearestBrazier(pos)) return 'Brazier';
       if (wedged && pos.z > 79 && pos.z < 83 && Math.abs(pos.x) < 2.4) return 'Crouch';
       const lore = Math.hypot(pos.x - LORE_POINT.x, pos.z - LORE_POINT.z);
       if (lore < 1.6 && pos.y > 1.6) return t('lore_dagon_hands');
@@ -311,6 +410,38 @@ export function createRoute(R, { camDebug = false, unlockedChargeTier = 1 } = {}
     get subtitleOpacity() { return subtitle.opacity; },
     get hintOpacity() { return hintOpacity; },
     get debugLines() { return debugLines; },
+    get shopId() { return shopId; },
+    orbs() { return wallet.orbs(); },
+    shopState() {
+      return {
+        id: shopId,
+        orbs: wallet.orbs(),
+        owned: wallet.snapshot().owned,
+        tier: wallet.chargeTier(),
+        hp: wallet.maxHp(),
+        wrath: wallet.wrathCost(),
+      };
+    },
+    closeShop() { shopId = null; },
+    purchase(id) {
+      const bought = wallet.buy(id);
+      if (!bought) return false;
+      motor.unlockedChargeTier = Math.max(motor.unlockedChargeTier, wallet.chargeTier());
+      const brazier = braziers.find((item) => item.id === shopId);
+      if (brazier) lights.flareBrazier(brazier.light);
+      return true;
+    },
+    grantDrop(kind) {
+      const red = redOrbsForDrop(kind);
+      if (red > 0) {
+        wallet.grant(red);
+        orbs.burst(readTranslation(actor.body), 'soul', 4);
+      } else if (kind === 'priest-respawn' || kind === 'priest-summon') {
+        orbs.burst(readTranslation(actor.body), 'health', 3);
+        orbs.burst(readTranslation(actor.body), 'mp', 3);
+      }
+      return red;
+    },
     attackers() { return []; },
     step(dtMs, ctx) {
       simMs += dtMs;
@@ -337,8 +468,14 @@ export function createRoute(R, { camDebug = false, unlockedChargeTier = 1 } = {}
       const heavy = resolved.find((item) => item.action === 'heavy');
       const attack = !locked && resolved.some((item) => item.action === 'light' || item.action === 'heavy' || item.action === 'wrath');
       const block = !locked && resolved.some((item) => item.action === 'block' || item.action === 'parry');
-      if (!locked && resolved.some((item) => item.action === 'light')) combat.startLight();
-      if (!locked && heavy) combat.startHeavy((heavy.chargeMs ?? 0) > 0);
+      if (!locked && resolved.some((item) => item.action === 'light')) {
+        combat.startLight();
+        shatterUrns(readTranslation(actor.body), 1);
+      }
+      if (!locked && heavy) {
+        combat.startHeavy((heavy.chargeMs ?? 0) > 0);
+        shatterUrns(readTranslation(actor.body), heavy.tier ?? 1);
+      }
       if (!locked && resolved.some((item) => item.action === 'parry')) combat.startParry();
       if (!locked && resolved.some((item) => item.action === 'interact')) combat.startGrab();
       combat.step(dtMs);
@@ -431,9 +568,26 @@ export function createRoute(R, { camDebug = false, unlockedChargeTier = 1 } = {}
         motor.vy = 0;
         tracker.snap(playerTrack);
       }
-      if (interact && Math.hypot(landed.x - 7.2, landed.z - 73) < 2.2) {
-        wedged = true;
-        syncGate();
+      if (interact) {
+        const brazier = nearestBrazier(landed);
+        if (brazier) shopId = brazier.id;
+        else if (Math.hypot(landed.x - 7.2, landed.z - 73) < 2.2) {
+          wedged = true;
+          syncGate();
+          if (!gateRewarded) {
+            gateRewarded = true;
+            wallet.grant(GATE_SOLVED_BURST);
+            orbs.burst(landed, 'soul', 8);
+          }
+        }
+      }
+      const urnC = urns.find((urn) => urn.id === 'C');
+      if (urnC && !urnC.broken) {
+        const near = Math.hypot(landed.x - urnC.x, landed.z - urnC.z) < 3.5;
+        const held = near ? actions.chargeTier() : 0;
+        const stepLight = held <= 1 ? 0.18 : held === 2 ? 0.55 : 1;
+        const pulse = held >= 3 ? 0.75 + 0.25 * Math.sin(simMs * 0.012) : 1;
+        urnC.mat.emissiveIntensity = stepLight * pulse;
       }
       if (flareMs <= 500) flareMs += dtMs;
       const flare = flareMs < 150 ? 2 : flareMs < 350 ? 2 - (flareMs - 150) / 200 : 1;
@@ -443,6 +597,7 @@ export function createRoute(R, { camDebug = false, unlockedChargeTier = 1 } = {}
       cloud.setOrigin(position);
       cloud.setMotes(actions.charging() ? Math.max(actions.charge01(), 0.15) : 0);
       cloud.step(dtMs);
+      orbs.step(dtMs);
       figure.rotation.y = motor.facing;
       return stepMs;
     },

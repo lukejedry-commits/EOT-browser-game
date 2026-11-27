@@ -32,6 +32,7 @@ export const FRAMES = {
     { id: 'light2', startup: 120, active: 100, recovery: 130 },
     { id: 'light3', startup: 120, active: 100, recovery: 130 },
     { id: 'light4', startup: 150, active: 200, recovery: 250 },
+    { id: 'light5', startup: 120, active: 100, recovery: 130 },
   ],
   heavy: { id: 'heavy', startup: 450, active: 120, recovery: 350 },
   heavyEnterBeforeContact: 150,
@@ -58,10 +59,15 @@ export function rollHasIFrame(elapsed, frames = FRAMES) {
 }
 
 /** Attack clock. The active window is whatever phaseAt says at this elapsed time. */
-export function createCombatClock(frames = FRAMES) {
+export function createCombatClock(frames = FRAMES, options = {}) {
   let move = null;
   let elapsed = 0;
   let chain = 0;
+
+  function lightList() {
+    const count = options.lightCount ? options.lightCount() : 4;
+    return frames.light.slice(0, count);
+  }
 
   function begin(next, at = 0) {
     move = next;
@@ -70,10 +76,11 @@ export function createCombatClock(frames = FRAMES) {
 
   return {
     startLight() {
+      const list = lightList();
       const open = move != null && phaseAt(move, elapsed) !== 'done';
-      const index = open ? chain : 0;
-      begin(frames.light[index]);
-      chain = (index + 1) % frames.light.length;
+      const index = open ? chain % list.length : 0;
+      begin(list[index]);
+      chain = (index + 1) % list.length;
     },
     startHeavy(charged) {
       begin(frames.heavy, charged ? chargedHeavyElapsed(frames) : 0);

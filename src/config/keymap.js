@@ -278,6 +278,9 @@ export function createActionResolver(keymap = KEYMAP, unlockedTier = 1) {
     charge01() {
       return shown01;
     },
+    chargeTier() {
+      return tier;
+    },
     canBlock() {
       return !this.charging();
     },

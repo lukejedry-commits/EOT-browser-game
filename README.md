@@ -2,7 +2,7 @@
 
 God of War (2005)-style third-person browser slice. This repo is at milestone **M1**: a graybox of the slice route, Korrath's controller, and fixed camera zones. Combat damage is still a stub.
 
-`BUILD_ID` is `m1-2`. It is drawn in the corner and on the main menu. The fixed shots sit in open air and look at Korrath. `tests/camera-sight.test.js` checks that each route sample sits inside the frame with clear space around it, and that the Tide Gate shot can see the gate, crank, idol, drag marks, and rubble. The opening line fades in, holds, and fades out on its own.
+`BUILD_ID` is `m1-3`. It is drawn in the corner and on the main menu. The fixed shots sit in open air and look at Korrath. `tests/camera-sight.test.js` checks that each route sample sits inside the frame with clear space around it, and that the Tide Gate shot can see the gate, crank, idol, drag marks, and rubble. The opening line fades in, holds, and fades out on its own.
 
 ## Run
 
