@@ -107,4 +107,54 @@ describe('camera zones frame Korrath', () => {
 
     route.dispose();
   }, 20000);
+
+  it('keeps Korrath in frame when he steps backward or sideways', async () => {
+    const R = await loadRapier();
+    const route = createRoute(R);
+    const hero = route.scene.getObjectByName('korrath');
+    const box = new THREE.Box3();
+    const shifts = [
+      { id: 'back', x: 0, z: -1.6 },
+      { id: 'side', x: 0.7, z: 0 },
+    ];
+    for (const point of ROUTE_POINTS) {
+      for (const shift of shifts) {
+        route.place({ x: point.x + shift.x, y: point.y, z: point.z + shift.z });
+        route.camera.aspect = 16 / 9;
+        route.present(1, 16, false);
+        hero.updateWorldMatrix(true, true);
+        box.setFromObject(hero);
+        route.camera.updateMatrixWorld(true);
+        const frame = projectBox(route.camera, box);
+        const label = `${point.zone} ${shift.id}`;
+        expect(frame.minX, label).toBeGreaterThan(-0.8);
+        expect(frame.maxX, label).toBeLessThan(0.8);
+        expect(frame.minY, label).toBeGreaterThan(-0.8);
+        expect(frame.maxY, label).toBeLessThan(0.8);
+      }
+    }
+    route.dispose();
+  }, 20000);
+
+  it('keeps world direction when he walks backward through a camera cut', async () => {
+    const R = await loadRapier();
+    const route = createRoute(R);
+    route.place({ x: 0, y: 1.05, z: 10.2 });
+    const input = { isDown: (code) => code === 'KeyS' };
+    let crossed = false;
+    let previous = route.cameraName;
+    for (let t = 0; t < 80; t += 1) {
+      route.step(16, { input, settings: { quality: 'high', inputDevice: 'keyboard' }, events: [] });
+      const pose = route.captureState();
+      if (t > 8) expect(pose.player.z, 'still moving back').toBeLessThan(10);
+      if (route.cameraName !== previous) {
+        crossed = true;
+        expect(pose.player.z).toBeLessThan(10);
+        previous = route.cameraName;
+      }
+    }
+    expect(crossed).toBe(true);
+    expect(route.captureState().player.z).toBeLessThan(9);
+    route.dispose();
+  }, 20000);
 });

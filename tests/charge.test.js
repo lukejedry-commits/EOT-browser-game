@@ -162,6 +162,75 @@ describe('charge cancel and move speed', () => {
     expect(fullSpeed).toBeCloseTo(MOVEMENT.runSpeed, 1);
   });
 
+  it('vents on the 0.3 s boundary, not on a 0.25 s crouch tap, and auto-vents at 2 s past max', () => {
+    const open = createActionResolver(KEYMAP, 3);
+    open.push([press({ kind: 'key', code: 'ShiftLeft', time: 0 })], 0);
+    const early = open.push([
+      { kind: 'key', code: 'ShiftLeft', pressed: false, time: 299 },
+    ], 299);
+    expect(early.some((item) => item.type === 'emberVent')).toBe(false);
+
+    const tier2 = createActionResolver(KEYMAP, 3);
+    tier2.push([press({ kind: 'key', code: 'ShiftLeft', time: 0 })], 0);
+    const at2 = tier2.push([
+      { kind: 'key', code: 'ShiftLeft', pressed: false, time: 300 },
+    ], 300);
+    const vent2 = at2.find((item) => item.type === 'emberVent');
+    expect(vent2).toMatchObject({ tier: 2, duration: 400 });
+
+    const tier3 = createActionResolver(KEYMAP, 3);
+    tier3.push([press({ kind: 'key', code: 'ShiftLeft', time: 0 })], 0);
+    const at3 = tier3.push([
+      { kind: 'key', code: 'ShiftLeft', pressed: false, time: 800 },
+    ], 800);
+    expect(at3.find((item) => item.type === 'emberVent')).toMatchObject({ tier: 3, duration: 600 });
+
+    const crouch = createActionResolver(KEYMAP, 3);
+    const tapped = crouch.push([
+      press({ kind: 'key', code: 'ShiftLeft', time: 0 }),
+      { kind: 'key', code: 'ShiftLeft', pressed: false, time: 250 },
+    ], 250);
+    expect(tapped.some((item) => item.action === 'crouch')).toBe(true);
+    expect(tapped.some((item) => item.type === 'emberVent')).toBe(false);
+
+    const pastCrouch = createActionResolver(KEYMAP, 3);
+    const heldPast = pastCrouch.push([
+      press({ kind: 'key', code: 'ShiftLeft', time: 0 }),
+      { kind: 'key', code: 'ShiftLeft', pressed: false, time: 251 },
+    ], 251);
+    expect(heldPast.some((item) => item.action === 'crouch')).toBe(false);
+    expect(heldPast.some((item) => item.type === 'emberVent')).toBe(false);
+
+    const auto = createActionResolver(KEYMAP, 3);
+    auto.push([press({ kind: 'key', code: 'ShiftLeft', time: 0 })], 0);
+    const before = auto.push([], COMBAT.maxChargeMs + 1999);
+    expect(before.some((item) => item.type === 'emberVent')).toBe(false);
+    const after = auto.push([], COMBAT.maxChargeMs + 2000);
+    expect(after.find((item) => item.type === 'emberVent')).toMatchObject({ tier: 3, duration: 600, auto: true });
+  });
+
+  it('does not vent when a roll, a right click, or a hit cancels the charge', () => {
+    const rolled = createActionResolver(KEYMAP, 3);
+    rolled.push([press({ kind: 'key', code: 'ShiftLeft', time: 0 })], 0);
+    const dodge = rolled.push([
+      press({ kind: 'key', code: 'Space', time: 500, shift: true }),
+    ], 500);
+    expect(dodge.some((item) => item.action === 'dodge')).toBe(true);
+    expect(dodge.some((item) => item.type === 'emberVent')).toBe(false);
+
+    const blocked = createActionResolver(KEYMAP, 3);
+    blocked.push([press({ kind: 'key', code: 'ShiftLeft', time: 0 })], 0);
+    const rmb = blocked.push([press({ kind: 'mouse', button: 2, time: 500 })], 500);
+    expect(rmb.some((item) => item.type === 'emberVent')).toBe(false);
+
+    const hurt = createActionResolver(KEYMAP, 3);
+    hurt.push([press({ kind: 'key', code: 'ShiftLeft', time: 0 })], 0);
+    hurt.push([], 500);
+    const hit = hurt.cancelFromHit();
+    expect(hit.some((item) => item.reason === 'hit')).toBe(true);
+    expect(hit.some((item) => item.type === 'emberVent')).toBe(false);
+  });
+
   it('keeps plain RMB as block and treats alt-click as heavy only when enabled', () => {
     const plain = createActionResolver();
     plain.push([press({ kind: 'mouse', button: 2, time: 0, alt: true })], 0);
