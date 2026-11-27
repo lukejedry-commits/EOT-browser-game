@@ -4,12 +4,14 @@ import { aimSnap } from '../camera/aim.js';
 import { fitShot, offscreenEdges, projectNdc } from '../camera/framing.js';
 import { blendShots, railShot, selectZone } from '../camera/zones.js';
 import { KEYMAP, createActionResolver, axisFromKeys } from '../config/keymap.js';
-import { createSubtitleState, stepHint, stepSubtitles } from '../config/subtitles.js';
-import { chargeGlow } from '../config/combat.js';
+import { createSubtitleState, requestBark, stepHint, stepSubtitles } from '../config/subtitles.js';
+import { chargeGlow, createCombatClock } from '../config/combat.js';
+import { LIGHTING } from '../config/lighting.js';
 import { MOVEMENT } from '../config/movement.js';
 import { t } from '../core/dialogue.js';
 import { sampleGamepadStick } from '../core/input.js';
 import { createAirPuff } from '../fx/puff.js';
+import { createEmberCloud } from '../fx/embers.js';
 import {
   createCharacter,
   createFixedCuboid,
@@ -21,12 +23,15 @@ import {
 import {
   CEILING_Y,
   COLONNADE_GAP,
+  cellShot,
   corridorShot,
   GAP,
   GATE_PUSH_ZONE,
   GATE_TRAVEL,
+  holdFixedShot,
   IDOL_HEIGHT,
   LORE_POINT,
+  ROUTE_POINTS,
   RUBBLE_VISIBLE_HEIGHT,
   SAPH_HEIGHT,
   SPAWN,
@@ -43,6 +48,7 @@ import {
   stepHorizontal,
   stepJump,
 } from '../player/motor.js';
+import { createVentState, startVent, stepVent, ventAllowsRoll, ventBlocksCombat, ventSpeedScale } from '../player/vent.js';
 import { createLights, createTracker, disposeResources } from './track.js';
 
 const RADIUS = 0.35;
@@ -50,8 +56,10 @@ const IDENTITY = { x: 0, y: 0, z: 0, w: 1 };
 
 function shotFor(zone, player) {
   if (!zone) return null;
+  if (zone.id === 'cam_cell') return cellShot(player);
   if (zone.kind === 'rail') return corridorShot(player);
-  return { position: { ...zone.position }, lookAt: { ...zone.lookAt }, fov: zone.fov };
+  const anchor = ROUTE_POINTS.find((point) => point.zone === zone.id);
+  return holdFixedShot(zone, player, anchor);
 }
 
 function quatX(angle) {
@@ -61,8 +69,8 @@ function quatX(angle) {
 export function createRoute(R, { camDebug = false, unlockedChargeTier = 1 } = {}) {
   const world = createWorld(R);
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x14161a);
-  scene.fog = new THREE.Fog(0x14161a, 22, 78);
+  scene.background = new THREE.Color(LIGHTING.background);
+  scene.fog = new THREE.Fog(LIGHTING.background, LIGHTING.fogNear, LIGHTING.fogFar);
   const geometries = new Set();
   const materials = new Set();
   const lights = createLights(scene);
@@ -117,12 +125,10 @@ export function createRoute(R, { camDebug = false, unlockedChargeTier = 1 } = {}
   solid(0.4, 3, 18, -3, 1.5, 17, 0x3c434c);
   solid(0.4, 3, 18, 3, 1.5, 17, 0x3c434c);
   solid(4, 0.25, 1.2, 0, 0.125, 14, 0x5c656e);
-  const rampAngle = 0.3;
-  const ramp = visual(4, 0.3, 4, 0, 0.55, 16.2, 0x6a737c, rampAngle);
-  const rampBody = world.createRigidBody(
-    R.RigidBodyDesc.fixed().setTranslation(0, 0.55, 16.2).setRotation(quatX(rampAngle)),
-  );
-  world.createCollider(R.ColliderDesc.cuboid(2, 0.15, 2), rampBody);
+  // Shallow visual wedge. The old tilted box faced the player as a wall and
+  // stopped him on the 0.25 m step, which is under the 0.35 m step-up.
+  const rampAngle = -0.1;
+  visual(3.2, 0.16, 2.2, 0, 0.12, 15.5, 0x6a737c, rampAngle);
   solid(5, 1.6, 3.2, 0, 2.1, 19.6, 0x2a3038);
   solid(16, 0.4, 6, 0, -0.2, 29, 0x465058);
   solid(16, 0.4, 7.6, 0, -0.2, 40.1, 0x465058);
@@ -171,6 +177,7 @@ export function createRoute(R, { camDebug = false, unlockedChargeTier = 1 } = {}
   createFixedCuboid(R, world, { x: 4.6, y: CEILING_Y / 2, z: 81.2 }, { x: 1.6, y: CEILING_Y / 2, z: 0.6 });
   solid(3.2, THRESHOLD_HEIGHT, 2.4, 8.2, THRESHOLD_HEIGHT / 2, 79.2, 0x5a534c);
   visual(0.35, 0.35, 0.35, LORE_POINT.x, LORE_POINT.y, LORE_POINT.z, 0xff7a1a);
+  visual(0.55, 0.42, 0.48, LORE_POINT.x - 0.85, THRESHOLD_HEIGHT + 0.21, LORE_POINT.z, 0x6d675e);
 
   solid(1.4, 6, 1.4, -5, 3, 94, 0x3c434c);
   solid(1.4, 6, 1.4, 5, 3, 94, 0x3c434c);
@@ -221,7 +228,12 @@ export function createRoute(R, { camDebug = false, unlockedChargeTier = 1 } = {}
   scene.add(figure);
   const playerTrack = tracker.add(figure, actor.body);
   const puff = createAirPuff();
-  scene.add(puff.points);
+  const cloud = createEmberCloud();
+  scene.add(puff.points, cloud.points);
+  geometries.add(puff.points.geometry);
+  geometries.add(cloud.points.geometry);
+  materials.add(puff.points.material);
+  materials.add(cloud.points.material);
 
   const camera = new THREE.PerspectiveCamera(46, 16 / 9, 0.1, 140);
   const motor = createMotorState();
@@ -229,13 +241,14 @@ export function createRoute(R, { camDebug = false, unlockedChargeTier = 1 } = {}
     ? unlockedChargeTier
     : 1;
   const actions = createActionResolver(KEYMAP, () => motor.unlockedChargeTier);
+  const combat = createCombatClock();
+  const vent = createVentState();
   const subtitles = createSubtitleState();
   let subtitle = { id: null, opacity: 0, light: 0 };
   let hintMoveMs = 0;
   let hintOpacity = 1;
-  const cellLight = new THREE.PointLight(0xfff4d2, 0, 18, 0);
-  cellLight.position.set(0, 3.1, 4.2);
-  scene.add(cellLight);
+  const debugLines = [];
+  lights.setZone('cam_cell');
   let zoneId = 'cam_cell';
   let latch = null;
   let basis = basisFromLook(ZONES[0].position, ZONES[0].lookAt);
@@ -297,23 +310,38 @@ export function createRoute(R, { camDebug = false, unlockedChargeTier = 1 } = {}
     },
     get subtitleOpacity() { return subtitle.opacity; },
     get hintOpacity() { return hintOpacity; },
+    get debugLines() { return debugLines; },
     attackers() { return []; },
     step(dtMs, ctx) {
       simMs += dtMs;
       subtitle = stepSubtitles(subtitles, dtMs);
-      cellLight.intensity = 5.5 * subtitle.light;
+      stepVent(vent, dtMs);
       const moving = Math.hypot(motor.vx, motor.vz) > 0.45;
       const hintState = stepHint(hintMoveMs, moving, dtMs);
       hintMoveMs = hintState.moveMs;
       hintOpacity = hintState.opacity;
       puff.setQuality(ctx.settings.quality);
       const resolved = actions.push(ctx.events ?? [], simMs);
+      const ventEvent = resolved.find((item) => item.type === 'emberVent');
+      if (ventEvent && startVent(vent, ventEvent.tier)) {
+        debugLines.push(`emberVent tier=${ventEvent.tier} duration=${ventEvent.duration}`);
+        if (debugLines.length > 6) debugLines.shift();
+        if (ventEvent.tier >= 2) requestBark(subtitles, 'bark_ember_vent');
+        cloud.playVent(readTranslation(actor.body));
+      }
+      const locked = ventBlocksCombat(vent);
       const names = resolved.filter((item) => item.action !== 'contextmenu').map((item) => item.action);
       if (names.length) actionText = names[names.length - 1];
       const jumpEdge = resolved.some((item) => item.action === 'jump');
-      const dodge = resolved.some((item) => item.action === 'dodge');
-      const attack = resolved.some((item) => item.action === 'light' || item.action === 'heavy' || item.action === 'wrath');
-      const block = resolved.some((item) => item.action === 'block' || item.action === 'parry');
+      const dodge = resolved.some((item) => item.action === 'dodge') && ventAllowsRoll(vent);
+      const heavy = resolved.find((item) => item.action === 'heavy');
+      const attack = !locked && resolved.some((item) => item.action === 'light' || item.action === 'heavy' || item.action === 'wrath');
+      const block = !locked && resolved.some((item) => item.action === 'block' || item.action === 'parry');
+      if (!locked && resolved.some((item) => item.action === 'light')) combat.startLight();
+      if (!locked && heavy) combat.startHeavy((heavy.chargeMs ?? 0) > 0);
+      if (!locked && resolved.some((item) => item.action === 'parry')) combat.startParry();
+      if (!locked && resolved.some((item) => item.action === 'interact')) combat.startGrab();
+      combat.step(dtMs);
       const toggle = resolved.some((item) => item.action === 'crouch');
       const interact = resolved.some((item) => item.action === 'interact');
 
@@ -333,6 +361,7 @@ export function createRoute(R, { camDebug = false, unlockedChargeTier = 1 } = {}
         blendFrom = { position: { ...previousShot.position }, lookAt: { ...previousShot.lookAt }, fov: previousShot.fov };
         blendMs = 0;
         zoneId = zone.id;
+        lights.setZone(zone.id);
       } else {
         blendMs += dtMs;
       }
@@ -358,7 +387,7 @@ export function createRoute(R, { camDebug = false, unlockedChargeTier = 1 } = {}
       }
 
       const speedBasis = velocityFromBasis(basis, axes, 1);
-      stepHorizontal(motor, speedBasis.x, speedBasis.z, dtMs, MOVEMENT, actions.speedScale());
+      stepHorizontal(motor, speedBasis.x, speedBasis.z, dtMs, MOVEMENT, actions.speedScale() * ventSpeedScale(vent));
       const glow = chargeGlow(actions.charge01());
       glaive.material.color.setHex(glow);
       glaive.material.emissive.setHex(glow);
@@ -373,6 +402,7 @@ export function createRoute(R, { camDebug = false, unlockedChargeTier = 1 } = {}
       for (const jumpEvent of jumpEvents) {
         if (jumpEvent.type === 'airJump') {
           puff.play(position);
+          combat.startAirKick();
           flareMs = 0;
         }
       }
@@ -407,8 +437,12 @@ export function createRoute(R, { camDebug = false, unlockedChargeTier = 1 } = {}
       }
       if (flareMs <= 500) flareMs += dtMs;
       const flare = flareMs < 150 ? 2 : flareMs < 350 ? 2 - (flareMs - 150) / 200 : 1;
-      glaive.material.emissiveIntensity = 0.55 * flare;
+      glaive.material.emissiveIntensity = 0.55 * flare * (vent.active ? 0.5 : 1);
+      lights.step(dtMs, subtitle.light);
       puff.step(dtMs);
+      cloud.setOrigin(position);
+      cloud.setMotes(actions.charging() ? Math.max(actions.charge01(), 0.15) : 0);
+      cloud.step(dtMs);
       figure.rotation.y = motor.facing;
       return stepMs;
     },
@@ -427,6 +461,7 @@ export function createRoute(R, { camDebug = false, unlockedChargeTier = 1 } = {}
       camera.lookAt(shot.lookAt.x, shot.lookAt.y, shot.lookAt.z);
       camera.fov = shot.fov ?? 48;
       camera.updateProjectionMatrix();
+      lights.aim(camera.position, figure.position);
     },
     edgeMarkers() {
       const fov = (camera.fov * Math.PI) / 180;

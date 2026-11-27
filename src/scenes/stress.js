@@ -13,6 +13,8 @@ import {
 import { basisFromLook, velocityFromBasis } from '../camera/basis.js';
 import { axisFromKeys } from '../config/keymap.js';
 import { createLights, createTracker, disposeResources } from './track.js';
+import { createAirPuff } from '../fx/puff.js';
+import { createEmberCloud } from '../fx/embers.js';
 
 /**
  * Peak-frame stand-in for Luke's Chromebook pass.
@@ -26,6 +28,8 @@ import { createLights, createTracker, disposeResources } from './track.js';
  *   debris:   12 * BoxGeometry = 144
  *   ground:   2
  *   total:    49754 triangles
+ *   ember FX: air puff (16) + charge motes and vent burst (19) = 35 sprites,
+ *             2 extra draw calls. Meshes stay 70. Draws at peak: 72.
  *
  * Physics load named in the M0 brief: 6 kinematic capsules and 12 dynamic
  * debris bodies, plus the player capsule and a fixed ground. Prop meshes are
@@ -112,6 +116,18 @@ export function createStressScene(R) {
   const playerMesh = addVisual(new THREE.Mesh(capsuleGeo, playerMat));
   const player = createCharacter(R, world, PLAYER_SPAWN);
   const playerTrack = tracker.add(playerMesh, player.body);
+  const puff = createAirPuff();
+  const cloud = createEmberCloud();
+  const fxOrigin = { x: PLAYER_SPAWN.x, y: 1.4, z: PLAYER_SPAWN.z };
+  puff.play(fxOrigin);
+  cloud.setOrigin(fxOrigin);
+  cloud.setMotes(1);
+  cloud.playVent(fxOrigin);
+  scene.add(puff.points, cloud.points);
+  geometries.add(puff.points.geometry);
+  geometries.add(cloud.points.geometry);
+  materials.add(puff.points.material);
+  materials.add(cloud.points.material);
 
   const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 200);
   camera.position.set(0, 8, 18);
@@ -180,6 +196,10 @@ export function createStressScene(R) {
         stepCharacter(enemy.actor, vx, vz, dt);
       }
       world.step();
+      puff.step(dtMs);
+      cloud.setMotes(1);
+      cloud.step(dtMs);
+      if (puff.points.visible === false) puff.play(fxOrigin);
       const stepMs = performance.now() - t0;
       tracker.snapshot();
       return stepMs;

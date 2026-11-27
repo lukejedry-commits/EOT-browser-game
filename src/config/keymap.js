@@ -79,6 +79,33 @@ export function createActionResolver(keymap = KEYMAP, unlockedTier = 1) {
   let rmbBlocking = false;
   let lmbDown = null;
   let lmbResolved = false;
+  let suppressShift = false;
+
+  function endCharge(actions, stepTime, reason) {
+    if (tier !== 0) {
+      actions.push({ type: 'chargeTier', tier: 0, previous: tier, chargeMs: 0, charge01: 0, reason });
+    }
+    tier = 0;
+    shown01 = 0;
+    shiftDownAt = null;
+    shiftDirty = false;
+    chargeVoid = false;
+    if (reason === 'autoVent') suppressShift = true;
+    return stepTime;
+  }
+
+  function releaseVent(actions, stepTime, held) {
+    const chargeMs = Math.min(maxCharge(), held);
+    const releasedTier = chargeTier(chargeMs);
+    if (releasedTier >= 2) {
+      actions.push({
+        type: 'emberVent',
+        tier: releasedTier,
+        duration: releasedTier >= 3 ? COMBAT.ventMs[3] : COMBAT.ventMs[2],
+        time: stepTime,
+      });
+    }
+  }
 
   function voidCharge(actions, reason) {
     if (shiftDownAt == null || chargeVoid) return;
@@ -121,34 +148,22 @@ export function createActionResolver(keymap = KEYMAP, unlockedTier = 1) {
       const shifted = Boolean(event.shift) || shiftDownAt != null;
       if (event.kind === 'key' && event.code === 'ShiftLeft') {
         if (event.pressed) {
+          if (suppressShift) continue;
           shiftDownAt = event.time;
           shiftDirty = false;
           chargeVoid = false;
           noteTier(actions, event.time);
-        } else if (shiftDownAt != null) {
-          const held = event.time - shiftDownAt;
-          if (!shiftDirty && !chargeVoid && held <= COMBAT.crouchTapMs) {
-            actions.push({ action: 'crouch', time: event.time });
-          } else if (!shiftDirty && !chargeVoid) {
-            const chargeMs = Math.min(maxCharge(), held);
-            const releasedTier = chargeTier(chargeMs);
-            if (releasedTier >= 2) {
-              actions.push({
-                type: 'emberVent',
-                tier: releasedTier,
-                duration: releasedTier >= 3 ? 600 : 400,
-                time: event.time,
-              });
+        } else if (shiftDownAt != null || suppressShift) {
+          if (shiftDownAt != null) {
+            const held = event.time - shiftDownAt;
+            if (!shiftDirty && !chargeVoid && held <= COMBAT.crouchTapMs) {
+              actions.push({ action: 'crouch', time: event.time });
+            } else if (!shiftDirty && !chargeVoid) {
+              releaseVent(actions, event.time, held);
             }
+            endCharge(actions, event.time, 'release');
           }
-          if (tier !== 0) {
-            actions.push({ type: 'chargeTier', tier: 0, previous: tier, chargeMs: 0, charge01: 0, reason: 'release' });
-          }
-          tier = 0;
-          shown01 = 0;
-          shiftDownAt = null;
-          shiftDirty = false;
-          chargeVoid = false;
+          suppressShift = false;
         }
         continue;
       }
@@ -235,6 +250,20 @@ export function createActionResolver(keymap = KEYMAP, unlockedTier = 1) {
       actions.push({ action: 'block', time: stepTime });
     }
     noteTier(actions, stepTime);
+    if (shiftDownAt != null && !shiftDirty && !chargeVoid && unlockedNow() >= 3) {
+      const held = stepTime - shiftDownAt;
+      const atMax = held - maxCharge();
+      if (atMax >= COMBAT.autoVentMs) {
+        actions.push({
+          type: 'emberVent',
+          tier: 3,
+          duration: COMBAT.ventMs[3],
+          time: stepTime,
+          auto: true,
+        });
+        endCharge(actions, stepTime, 'autoVent');
+      }
+    }
     return actions;
   }
 

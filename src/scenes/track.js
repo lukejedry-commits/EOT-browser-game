@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { LIGHTING } from '../config/lighting.js';
 
 const scratch = { x: 0, y: 0, z: 0 };
 const scratchRot = { x: 0, y: 0, z: 0, w: 1 };
@@ -64,18 +65,119 @@ export function createTracker() {
   };
 }
 
-export function createLights(scene) {
-  const hemi = new THREE.HemisphereLight(0xd5dde6, 0x2c3036, 0.9);
-  const key = new THREE.DirectionalLight(0xf2f6fb, 1.15);
-  key.position.set(8, 14, 6);
+function mixColor(from, to, t) {
+  const color = new THREE.Color(from);
+  color.lerp(new THREE.Color(to), t);
+  return color;
+}
+
+export function createLights(scene, config = LIGHTING) {
+  const hemi = new THREE.HemisphereLight(config.hemiSky, config.hemiGround, config.hemiIntensity);
+  const key = new THREE.DirectionalLight(config.rim, 0.9);
+  key.position.set(0, 4, -2);
+  const target = new THREE.Object3D();
+  scene.add(target);
+  key.target = target;
+  const points = [0, 1].map(() => {
+    const light = new THREE.PointLight(0xffffff, 0, 16, 1);
+    scene.add(light);
+    return light;
+  });
   scene.add(hemi, key);
-  const baseHemi = hemi.intensity;
-  const baseKey = key.intensity;
+  if (points.length !== config.pointBudget) {
+    throw new Error(`light budget is ${config.pointBudget} point lights`);
+  }
+  let dim = 1;
+  let from = null;
+  let goal = null;
+  let blend = config.blendMs;
+  const shown = {
+    sky: config.hemiSky,
+    key: config.rim,
+    keyIntensity: 0.9,
+    points: points.map(() => ({ color: config.rim, intensity: 0, x: 0, y: 3, z: 0, distance: 16 })),
+  };
+
+  function snapshot() {
+    return {
+      sky: shown.sky,
+      key: shown.key,
+      keyIntensity: shown.keyIntensity,
+      points: shown.points.map((point) => ({ ...point })),
+    };
+  }
+
+  function apply(angel = 0) {
+    hemi.color.setHex(shown.sky);
+    hemi.groundColor.setHex(config.hemiGround);
+    hemi.intensity = config.hemiIntensity * dim;
+    key.color.setHex(shown.key);
+    key.intensity = shown.keyIntensity * dim;
+    points.forEach((light, index) => {
+      const point = shown.points[index];
+      const angelScale = point.angel ? angel : 1;
+      light.color.setHex(point.color);
+      light.intensity = point.intensity * angelScale * dim;
+      light.distance = point.distance;
+      light.position.set(point.x, point.y, point.z);
+    });
+  }
+
   return {
+    pointCount: points.length,
     setDimmed(on) {
-      const scale = on ? 0.4 : 1;
-      hemi.intensity = baseHemi * scale;
-      key.intensity = baseKey * scale;
+      dim = on ? 0.4 : 1;
+      apply();
+    },
+    aim(fromPosition, toPosition) {
+      key.position.set(fromPosition.x, fromPosition.y + 1.4, fromPosition.z);
+      target.position.set(toPosition.x, toPosition.y + 0.9, toPosition.z);
+    },
+    setZone(id) {
+      const preset = config.zones[id] ?? config.zones.cam_corridor;
+      const next = {
+        sky: preset.sky,
+        key: preset.key,
+        keyIntensity: preset.keyIntensity,
+        points: preset.points.map((point) => ({ ...point })),
+      };
+      if (!goal) {
+        from = next;
+        goal = next;
+        shown.sky = next.sky;
+        shown.key = next.key;
+        shown.keyIntensity = next.keyIntensity;
+        shown.points = next.points.map((point) => ({ ...point }));
+        blend = config.blendMs;
+        apply(0);
+        return;
+      }
+      from = snapshot();
+      goal = next;
+      blend = 0;
+    },
+    step(dtMs, angel = 0) {
+      if (!goal) {
+        this.setZone('cam_cell');
+        blend = config.blendMs;
+      }
+      blend = Math.min(config.blendMs, blend + dtMs);
+      const t = config.blendMs <= 0 ? 1 : blend / config.blendMs;
+      shown.sky = mixColor(from.sky, goal.sky, t).getHex();
+      shown.key = mixColor(from.key, goal.key, t).getHex();
+      shown.keyIntensity = from.keyIntensity + (goal.keyIntensity - from.keyIntensity) * t;
+      shown.points.forEach((point, index) => {
+        const next = goal.points[index];
+        const prev = from.points[index];
+        point.color = mixColor(prev.color, next.color, t).getHex();
+        point.intensity = prev.intensity + (next.intensity - prev.intensity) * t;
+        point.x = prev.x + (next.x - prev.x) * t;
+        point.y = prev.y + (next.y - prev.y) * t;
+        point.z = prev.z + (next.z - prev.z) * t;
+        point.distance = prev.distance + (next.distance - prev.distance) * t;
+        point.angel = Boolean(next.angel);
+      });
+      apply(angel);
     },
   };
 }

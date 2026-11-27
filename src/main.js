@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { BUILD_ID } from './core/build.js';
+import { LIGHTING } from './config/lighting.js';
 import { checkpoint } from './core/checkpoint.js';
 import { loadDialogue, t } from './core/dialogue.js';
 import { CONTROL_LINES } from './config/keymap.js';
@@ -124,6 +125,7 @@ function ensureRenderer() {
     stencil: false,
     powerPreference: 'default',
   });
+  renderer.setClearColor(LIGHTING.background, 1);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.NoToneMapping;
   renderer.shadowMap.enabled = false;
@@ -243,7 +245,8 @@ function paintInput(events) {
   while (inputLog.length > 8) inputLog.shift();
   const charge = sceneApi?.chargeLevel ? sceneApi.chargeLevel() : 0;
   node.hidden = false;
-  node.textContent = `tiers ${unlockedChargeTier}  charge ${charge.toFixed(2)}\n${inputLog.join('\n')}`;
+  const vents = sceneApi?.debugLines?.length ? `${sceneApi.debugLines.join('\n')}\n` : '';
+  node.textContent = `tiers ${unlockedChargeTier}  charge ${charge.toFixed(2)}\n${vents}${inputLog.join('\n')}`;
 }
 
 window.__EOT__ = {
