@@ -2,7 +2,7 @@
 
 God of War (2005)-style third-person browser slice. This repo is at milestone **M1**: a graybox of the slice route, Korrath's controller, and fixed camera zones. Combat damage is still a stub.
 
-`BUILD_ID` is `m1-1`. It is drawn in the corner and on the main menu.
+`BUILD_ID` is `m1-1.1`. It is drawn in the corner and on the main menu. The fixed shots sit in open air and look at Korrath. `tests/camera-sight.test.js` checks that each route sample sits inside the frame with clear space around it, and that the Tide Gate shot can see the gate, crank, idol, drag marks, and rubble. The opening line fades in, holds, and fades out on its own.
 
 ## Run
 
@@ -30,7 +30,7 @@ The camera is fixed. The mouse does not orbit it.
 - **WASD** moves relative to the active camera. A cut keeps the old direction until you release the keys or change direction.
 - **Space** jumps. A second press in the air is the double jump.
 - **Tap Left Shift** (release within 0.25 s, with nothing else pressed) toggles crouch. A longer hold charges a heavy.
-- **Left Shift + left mouse** releases the charged heavy. Charge time is how long Shift was held. Tiers are under 0.3 s, 0.3–0.8 s, and 0.8–1.4 s (then it holds at max). While charging, move speed is halved and block is unavailable. Shift+Space, right mouse, or a hit cancels it.
+- **Left Shift + left mouse** releases the charged heavy. Charge time is how long Shift was held. Tiers are under 0.3 s, 0.3–0.8 s, and 0.8–1.4 s (then it holds at max). Charging stops at `player.unlockedChargeTier`, which is 1 in normal play, so a tier-1 release never vents. `?tiers=2` or `?tiers=3` unlocks higher tiers for testing. While charging, move speed is halved and block is unavailable. Shift+Space, right mouse, or a hit cancels it.
 - **Right mouse** tap parries, hold blocks.
 - **Left Shift + Space** dodge-rolls. The hurtbox drops to crouch height for the roll.
 - **R** Ember Wrath, **F** grab / interact, **P** pause. E and Q are unbound. Ctrl and Alt are not bound.

@@ -57,7 +57,19 @@ function heavyPayload(chargeMs) {
   };
 }
 
-export function createActionResolver(keymap = KEYMAP) {
+export function chargeCapMs(unlockedTier, config = COMBAT) {
+  const tier = unlockedTier >= 3 ? 3 : unlockedTier === 2 ? 2 : 1;
+  if (tier >= 3) return config.maxChargeMs;
+  if (tier === 2) return config.tier3Ms - 0.001;
+  return config.tier2Ms - 0.001;
+}
+
+export function createActionResolver(keymap = KEYMAP, unlockedTier = 1) {
+  const unlockedNow = () => {
+    const value = typeof unlockedTier === 'function' ? unlockedTier() : unlockedTier;
+    return value >= 3 ? 3 : value === 2 ? 2 : 1;
+  };
+  const maxCharge = () => chargeCapMs(unlockedNow());
   let shiftDownAt = null;
   let shiftDirty = false;
   let chargeVoid = false;
@@ -85,7 +97,7 @@ export function createActionResolver(keymap = KEYMAP) {
       }
       return;
     }
-    const chargeMs = Math.min(COMBAT.maxChargeMs, Math.max(0, stepTime - shiftDownAt));
+    const chargeMs = Math.min(maxCharge(), Math.max(0, stepTime - shiftDownAt));
     const next = chargeTier(chargeMs);
     shown01 = charge01(chargeMs);
     if (next !== tier) {
@@ -117,6 +129,17 @@ export function createActionResolver(keymap = KEYMAP) {
           const held = event.time - shiftDownAt;
           if (!shiftDirty && !chargeVoid && held <= COMBAT.crouchTapMs) {
             actions.push({ action: 'crouch', time: event.time });
+          } else if (!shiftDirty && !chargeVoid) {
+            const chargeMs = Math.min(maxCharge(), held);
+            const releasedTier = chargeTier(chargeMs);
+            if (releasedTier >= 2) {
+              actions.push({
+                type: 'emberVent',
+                tier: releasedTier,
+                duration: releasedTier >= 3 ? 600 : 400,
+                time: event.time,
+              });
+            }
           }
           if (tier !== 0) {
             actions.push({ type: 'chargeTier', tier: 0, previous: tier, chargeMs: 0, charge01: 0, reason: 'release' });
@@ -153,7 +176,7 @@ export function createActionResolver(keymap = KEYMAP) {
         const altClick = altHeavy && event.alt;
         if (shifted && mode === 'shiftClick' && !chargeVoid && shiftDownAt != null) {
           shiftDirty = true;
-          const chargeMs = Math.min(COMBAT.maxChargeMs, Math.max(0, event.time - shiftDownAt));
+          const chargeMs = Math.min(maxCharge(), Math.max(0, event.time - shiftDownAt));
           actions.push({ ...heavyPayload(chargeMs), time: event.time });
           tier = 0;
           shiftDownAt = event.time;

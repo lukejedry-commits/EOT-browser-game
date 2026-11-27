@@ -3,7 +3,8 @@ import { basisFromLook, updateMoveLatch, velocityFromBasis } from '../camera/bas
 import { aimSnap } from '../camera/aim.js';
 import { fitShot, offscreenEdges, projectNdc } from '../camera/framing.js';
 import { blendShots, railShot, selectZone } from '../camera/zones.js';
-import { createActionResolver, axisFromKeys } from '../config/keymap.js';
+import { KEYMAP, createActionResolver, axisFromKeys } from '../config/keymap.js';
+import { createSubtitleState, stepHint, stepSubtitles } from '../config/subtitles.js';
 import { chargeGlow } from '../config/combat.js';
 import { MOVEMENT } from '../config/movement.js';
 import { t } from '../core/dialogue.js';
@@ -20,6 +21,7 @@ import {
 import {
   CEILING_Y,
   COLONNADE_GAP,
+  corridorShot,
   GAP,
   GATE_PUSH_ZONE,
   GATE_TRAVEL,
@@ -48,7 +50,7 @@ const IDENTITY = { x: 0, y: 0, z: 0, w: 1 };
 
 function shotFor(zone, player) {
   if (!zone) return null;
-  if (zone.kind === 'rail') return { ...railShot(zone.rail, player), fov: zone.fov };
+  if (zone.kind === 'rail') return corridorShot(player);
   return { position: { ...zone.position }, lookAt: { ...zone.lookAt }, fov: zone.fov };
 }
 
@@ -56,7 +58,7 @@ function quatX(angle) {
   return { x: Math.sin(angle / 2), y: 0, z: 0, w: Math.cos(angle / 2) };
 }
 
-export function createRoute(R, { camDebug = false } = {}) {
+export function createRoute(R, { camDebug = false, unlockedChargeTier = 1 } = {}) {
   const world = createWorld(R);
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x14161a);
@@ -211,14 +213,29 @@ export function createRoute(R, { camDebug = false } = {}) {
   geometries.add(bodyMesh.geometry);
   geometries.add(head.geometry);
   geometries.add(glaive.geometry);
+  figure.name = 'korrath';
+  figure.frustumCulled = false;
+  figure.traverse((child) => {
+    child.frustumCulled = false;
+  });
   scene.add(figure);
   const playerTrack = tracker.add(figure, actor.body);
   const puff = createAirPuff();
   scene.add(puff.points);
 
-  const camera = new THREE.PerspectiveCamera(46, 1, 0.1, 140);
-  const actions = createActionResolver();
+  const camera = new THREE.PerspectiveCamera(46, 16 / 9, 0.1, 140);
   const motor = createMotorState();
+  motor.unlockedChargeTier = unlockedChargeTier === 2 || unlockedChargeTier === 3
+    ? unlockedChargeTier
+    : 1;
+  const actions = createActionResolver(KEYMAP, () => motor.unlockedChargeTier);
+  const subtitles = createSubtitleState();
+  let subtitle = { id: null, opacity: 0, light: 0 };
+  let hintMoveMs = 0;
+  let hintOpacity = 1;
+  const cellLight = new THREE.PointLight(0xfff4d2, 0, 18, 0);
+  cellLight.position.set(0, 3.1, 4.2);
+  scene.add(cellLight);
   let zoneId = 'cam_cell';
   let latch = null;
   let basis = basisFromLook(ZONES[0].position, ZONES[0].lookAt);
@@ -268,18 +285,27 @@ export function createRoute(R, { camDebug = false } = {}) {
     get actionText() { return actionText; },
     chargeLevel() { return actions.charge01(); },
     get cameraName() { return zoneId; },
+    get unlockedChargeTier() { return motor.unlockedChargeTier; },
     get wedged() { return wedged; },
     get prompt() {
+      if (subtitle.id) return t(subtitle.id);
       const pos = readTranslation(actor.body);
-      if (zoneId === 'cam_cell') return t('cell_angel_01');
       if (wedged && pos.z > 79 && pos.z < 83 && Math.abs(pos.x) < 2.4) return 'Crouch';
       const lore = Math.hypot(pos.x - LORE_POINT.x, pos.z - LORE_POINT.z);
       if (lore < 1.6 && pos.y > 1.6) return t('lore_dagon_hands');
       return '';
     },
+    get subtitleOpacity() { return subtitle.opacity; },
+    get hintOpacity() { return hintOpacity; },
     attackers() { return []; },
     step(dtMs, ctx) {
       simMs += dtMs;
+      subtitle = stepSubtitles(subtitles, dtMs);
+      cellLight.intensity = 5.5 * subtitle.light;
+      const moving = Math.hypot(motor.vx, motor.vz) > 0.45;
+      const hintState = stepHint(hintMoveMs, moving, dtMs);
+      hintMoveMs = hintState.moveMs;
+      hintOpacity = hintState.opacity;
       puff.setQuality(ctx.settings.quality);
       const resolved = actions.push(ctx.events ?? [], simMs);
       const names = resolved.filter((item) => item.action !== 'contextmenu').map((item) => item.action);
@@ -415,9 +441,12 @@ export function createRoute(R, { camDebug = false } = {}) {
     captureState() {
       return {
         scene: 'route',
-        player: { ...SPAWN },
-        facing: 0,
-        wedged: false,
+        player: {
+          ...readTranslation(actor.body),
+          unlockedChargeTier: motor.unlockedChargeTier,
+        },
+        facing: motor.facing,
+        wedged,
       };
     },
     restoreState(state) {
@@ -429,6 +458,8 @@ export function createRoute(R, { camDebug = false } = {}) {
       motor.vy = 0;
       motor.facing = state?.facing ?? 0;
       motor.crouching = false;
+      const savedTier = state?.player?.unlockedChargeTier;
+      if (savedTier === 1 || savedTier === 2 || savedTier === 3) motor.unlockedChargeTier = savedTier;
       wedged = Boolean(state?.wedged);
       syncGate();
       applyHeight();

@@ -8,6 +8,8 @@
 
 export const GRAVITY_Y = -9.81;
 const MAX_FALL_SPEED = -25;
+// Rapier QueryFilterFlags.EXCLUDE_SENSORS. Camera volumes are sensors and must not stop the capsule.
+const EXCLUDE_SENSORS = 8;
 
 let rapierPromise = null;
 
@@ -96,7 +98,7 @@ export function stepCharacter(actor, vx, vz, dt, options = {}) {
   actor.desired.x = vx * dt;
   actor.desired.y = actor.vy * dt;
   actor.desired.z = vz * dt;
-  actor.controller.computeColliderMovement(actor.collider, actor.desired);
+  actor.controller.computeColliderMovement(actor.collider, actor.desired, EXCLUDE_SENSORS);
   const movement = actor.controller.computedMovement();
   const mx = movement.x;
   const my = movement.y;
