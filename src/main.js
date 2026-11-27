@@ -18,6 +18,8 @@ const perfEnabled = params.get('perf') === '1';
 const stressEnabled = params.get('stress') === '1';
 const camDebug = params.get('cam') === 'debug';
 const inputDebug = params.get('input') === '1';
+const tierQuery = Number(params.get('tiers'));
+const unlockedChargeTier = tierQuery === 2 || tierQuery === 3 ? tierQuery : 1;
 
 const canvas = document.querySelector('#view');
 const ui = document.querySelector('#ui');
@@ -86,8 +88,15 @@ const loop = createLoop({
     const prompt = document.querySelector('#prompt');
     if (prompt) {
       const text = sceneApi.prompt || '';
-      prompt.hidden = !text;
+      const opacity = sceneApi.subtitleOpacity ?? (text ? 1 : 0);
+      prompt.hidden = !text || opacity <= 0.02;
       prompt.textContent = text;
+      prompt.style.opacity = String(opacity);
+    }
+    if (hint && mode === 'play') {
+      const fade = sceneApi.hintOpacity ?? 1;
+      hint.style.opacity = String(fade);
+      hint.hidden = fade <= 0.02;
     }
     const action = document.querySelector('#action-readout');
     if (action) action.textContent = sceneApi.actionText || '';
@@ -148,7 +157,7 @@ async function play() {
     const R = await loadRapier();
     ensureRenderer();
     sceneApi?.dispose();
-    sceneApi = stressEnabled ? createStressScene(R) : createRoute(R, { camDebug });
+    sceneApi = stressEnabled ? createStressScene(R) : createRoute(R, { camDebug, unlockedChargeTier });
     applySize();
     checkpoint.save(sceneApi.captureState());
     setMode('play');
@@ -234,7 +243,7 @@ function paintInput(events) {
   while (inputLog.length > 8) inputLog.shift();
   const charge = sceneApi?.chargeLevel ? sceneApi.chargeLevel() : 0;
   node.hidden = false;
-  node.textContent = `charge ${charge.toFixed(2)}\n${inputLog.join('\n')}`;
+  node.textContent = `tiers ${unlockedChargeTier}  charge ${charge.toFixed(2)}\n${inputLog.join('\n')}`;
 }
 
 window.__EOT__ = {

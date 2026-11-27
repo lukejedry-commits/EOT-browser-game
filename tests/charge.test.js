@@ -64,7 +64,7 @@ describe('shift tap, hold, and chargeMs', () => {
     expect(dodge.some((item) => item.action === 'crouch')).toBe(false);
     expect(dodge.some((item) => item.action === 'jump')).toBe(false);
 
-    const heavy = createActionResolver();
+    const heavy = createActionResolver(KEYMAP, 3);
     const attack = heavy.push([
       press({ kind: 'key', code: 'ShiftLeft', time: 0 }),
       press({ kind: 'mouse', button: 0, time: 500, shift: true }),
@@ -78,7 +78,7 @@ describe('shift tap, hold, and chargeMs', () => {
   });
 
   it('emits tier changes as the hold crosses each boundary', () => {
-    const resolver = createActionResolver();
+    const resolver = createActionResolver(KEYMAP, 3);
     const started = resolver.push([press({ kind: 'key', code: 'ShiftLeft', time: 0 })], 0);
     expect(started.some((item) => item.type === 'chargeTier' && item.tier === 1)).toBe(true);
     const mid = resolver.push([], 300);
@@ -108,6 +108,38 @@ describe('charge cancel and move speed', () => {
     const hit = hurt.cancelFromHit();
     expect(hit.some((item) => item.reason === 'hit')).toBe(true);
     expect(hurt.speedScale()).toBe(1);
+  });
+
+  it('defaults the player charge tier to 1', () => {
+    expect(createMotorState().unlockedChargeTier).toBe(1);
+  });
+
+  it('stops charging at the unlocked tier and does not vent from tier 1', () => {
+    const locked = createActionResolver();
+    locked.push([press({ kind: 'key', code: 'ShiftLeft', time: 0 })], 0);
+    const climbed = locked.push([], 900);
+    expect(climbed.some((item) => item.type === 'chargeTier' && item.tier > 1)).toBe(false);
+    expect(locked.charging()).toBe(true);
+    const released = locked.push([
+      { kind: 'key', code: 'ShiftLeft', pressed: false, time: 900 },
+    ], 900);
+    expect(released.some((item) => item.type === 'emberVent')).toBe(false);
+    expect(released.some((item) => item.type === 'chargeTier' && item.tier > 1)).toBe(false);
+
+    const mid = createActionResolver(KEYMAP, 2);
+    mid.push([press({ kind: 'key', code: 'ShiftLeft', time: 0 })], 0);
+    const heldMid = mid.push([], 900);
+    expect(heldMid.some((item) => item.type === 'chargeTier' && item.tier === 3)).toBe(false);
+    expect(heldMid.some((item) => item.type === 'chargeTier' && item.tier === 2)).toBe(true);
+
+    const open = createActionResolver(KEYMAP, 3);
+    open.push([press({ kind: 'key', code: 'ShiftLeft', time: 0 })], 0);
+    const tier2 = open.push([], 500);
+    expect(tier2.some((item) => item.type === 'chargeTier' && item.tier === 2)).toBe(true);
+    const vented = open.push([
+      { kind: 'key', code: 'ShiftLeft', pressed: false, time: 500 },
+    ], 500);
+    expect(vented.some((item) => item.type === 'emberVent' && item.tier === 2)).toBe(true);
   });
 
   it('halves move speed only while the charge is held', () => {

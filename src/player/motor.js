@@ -21,6 +21,7 @@ export function createMotorState() {
     peakY: 0,
     recoverMs: 0,
     crouching: false,
+    unlockedChargeTier: 1,
     standMs: 0,
     dodgeMs: 0,
     blockMs: 0,
