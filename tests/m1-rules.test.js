@@ -141,3 +141,19 @@ describe('jump timing and crouch stand-up', () => {
     expect(hurtboxHeight(blocked)).toBe(MOVEMENT.crouchHeight);
   });
 });
+
+describe('crouch toggle (Luke bug 2)', () => {
+  it('a second Shift tap stands back up when there is headroom', () => {
+    const s = createMotorState();
+    stepBodyPose(s, { toggle: true, headroom: true }, 16);
+    expect(s.crouching).toBe(true);
+    stepBodyPose(s, { toggle: true, headroom: true }, 16);
+    expect(s.crouching).toBe(false);
+  });
+  it('stays crouched under a low ceiling', () => {
+    const s = createMotorState();
+    s.crouching = true;
+    stepBodyPose(s, { toggle: true, headroom: false }, 16);
+    expect(s.crouching).toBe(true);
+  });
+});

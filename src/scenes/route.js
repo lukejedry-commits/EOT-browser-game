@@ -270,13 +270,17 @@ export function createRoute(R, { camDebug = false, unlockedChargeTier = 1 } = {}
     actor.collider = world.createCollider(R.ColliderDesc.capsule(Math.max(0.05, half), RADIUS), actor.body);
   }
 
+  const HEADROOM_FILTER = 8; // Rapier QueryFilterFlags.EXCLUDE_SENSORS
+
   function headroom(position) {
     const centerY = position.y - (actor.halfHeight + RADIUS) + 0.08 + 0.55 + RADIUS;
     const hit = world.intersectionWithShape(
       { x: position.x, y: centerY, z: position.z },
       IDENTITY,
       standShape,
-      undefined,
+      // Exclude sensors: the camera-zone volumes always overlap the player and
+      // made every headroom check fail, so crouch could never stand back up.
+      HEADROOM_FILTER,
       undefined,
       actor.collider,
       actor.body,
@@ -413,7 +417,11 @@ export function createRoute(R, { camDebug = false, unlockedChargeTier = 1 } = {}
       else actor.controller.disableAutostep();
 
       const t0 = performance.now();
+      // The motor owns vertical speed (jump, double jump, gravity). Hand it to the
+      // capsule every step, then read back what the controller allowed.
+      actor.vy = motor.vy;
       stepCharacter(actor, motor.vx, motor.vz, dtMs / 1000, { integrateGravity: false });
+      motor.vy = actor.vy;
       world.step();
       const stepMs = performance.now() - t0;
       tracker.snapshot();
@@ -426,7 +434,7 @@ export function createRoute(R, { camDebug = false, unlockedChargeTier = 1 } = {}
       }
       const inGap = landed.z > GAP.minZ && landed.z < GAP.maxZ && Math.abs(landed.x) < 4;
       if (actor.grounded && !inGap) safe = { ...landed };
-      if (inGap && landed.y < GAP.killY + 0.9) {
+      if (landed.y < GAP.killY) {
         teleportBody(actor.body, { x: safe.x, y: 1.05, z: Math.min(safe.z, nearLip - 0.6) });
         motor.vy = 0;
         tracker.snap(playerTrack);
@@ -481,6 +489,7 @@ export function createRoute(R, { camDebug = false, unlockedChargeTier = 1 } = {}
           unlockedChargeTier: motor.unlockedChargeTier,
         },
         facing: motor.facing,
+        crouching: motor.crouching,
         wedged,
       };
     },
