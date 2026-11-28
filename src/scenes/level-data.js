@@ -139,7 +139,7 @@ export const ZONES = [
 
 export const SPAWN = { x: 0, y: 1.05, z: 7.4 };
 
-export const GAP = { minX: -4, maxX: 4, minZ: 32, maxZ: 32 + COLONNADE_GAP, killY: 0.15 };
+export const GAP = { minX: -4, maxX: 4, minZ: 32, maxZ: 32 + COLONNADE_GAP, killY: -2.5 };
 
 export const LORE_POINT = { x: 8.2, y: 2.5, z: 79.2 };
 

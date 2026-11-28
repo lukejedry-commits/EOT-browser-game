@@ -110,9 +110,15 @@ export function stepBodyPose(state, intent, dtMs, config = MOVEMENT) {
       jump = true;
     }
   }
-  if (intent.toggle && !state.crouching && state.dodgeMs <= 0) {
-    state.crouching = true;
-    state.standMs = 0;
+  if (intent.toggle && state.dodgeMs <= 0) {
+    if (!state.crouching) {
+      state.crouching = true;
+      state.standMs = 0;
+    } else if (headroom) {
+      // Second Shift tap stands back up, unless a ceiling is in the way.
+      state.crouching = false;
+      state.standMs = 0;
+    }
   }
   if (state.standMs > 0) {
     state.standMs = Math.max(0, state.standMs - dtMs);

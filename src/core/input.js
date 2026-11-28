@@ -93,6 +93,8 @@ export function pointerDelta(events) {
  * @param {Window | Document | HTMLElement} target
  * @param {{ getNow?: () => number, allowPointer?: () => boolean }} [hooks]
  */
+const GAME_KEYS = new Set(['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
+
 export function attachInput(buffer, target, hooks = {}) {
   const getNow = hooks.getNow ?? (() => performance.now());
   const allowPointer = hooks.allowPointer ?? (() => true);
@@ -103,6 +105,8 @@ export function attachInput(buffer, target, hooks = {}) {
     ctrl: Boolean(event.ctrlKey),
   });
   const onKeyDown = (event) => {
+    // Stop Space from re-pressing a focused button and Space/arrows from scrolling.
+    if (GAME_KEYS.has(event.code)) event.preventDefault();
     if (event.repeat) return;
     if (event.code === 'AltLeft' || event.code === 'AltRight') event.preventDefault();
     buffer.record({
@@ -114,6 +118,7 @@ export function attachInput(buffer, target, hooks = {}) {
     });
   };
   const onKeyUp = (event) => {
+    if (GAME_KEYS.has(event.code)) event.preventDefault();
     if (event.code === 'AltLeft' || event.code === 'AltRight') event.preventDefault();
     buffer.record({
       kind: 'key',
