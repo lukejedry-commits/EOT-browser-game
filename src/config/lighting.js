@@ -57,8 +57,8 @@ export const LIGHTING = {
       key: 0x7d96b2,
       keyIntensity: 0.8,
       points: [
-        { color: 0x6c87a6, intensity: 1.3, x: -2, y: 3.8, z: 68, distance: 22 },
-        { color: 0x6280a0, intensity: 1.05, x: 3, y: 3.2, z: 78, distance: 18 },
+        { id: 'b1', brazier: true, color: 0xff7a1a, intensity: 2.2, x: 10.2, y: 1.4, z: 63.4, distance: 14 },
+        { id: 'b2', brazier: true, color: 0xff7a1a, intensity: 2.2, x: -4, y: 1.4, z: 84.2, distance: 14 },
       ],
     },
     cam_threshold: {

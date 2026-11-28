@@ -197,6 +197,30 @@ form[data-settings] select {
 
 form[data-settings] button { margin-top: 8px; width: 100%; }
 
+#brazier {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 6;
+  width: min(420px, calc(100vw - 32px));
+  padding: 16px 18px;
+  background: rgba(12, 10, 14, 0.92);
+  border: 1px solid rgba(255, 122, 26, 0.7);
+  color: var(--ink);
+}
+
+#brazier h2 { margin: 0 0 6px; font-size: 18px; color: var(--ember); }
+#brazier ul { list-style: none; margin: 10px 0; padding: 0; display: grid; gap: 6px; }
+#brazier button {
+  width: 100%;
+  padding: 8px 10px;
+  background: #1c1816;
+  color: var(--ink);
+  border: 1px solid rgba(255, 122, 26, 0.4);
+}
+#brazier button:disabled { color: var(--muted); }
+
 #perf { position: fixed; top: 8px; left: 8px; z-index: 7; }
 
 .perf-panel {

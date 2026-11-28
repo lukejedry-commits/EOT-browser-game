@@ -88,6 +88,8 @@ export function createLights(scene, config = LIGHTING) {
     throw new Error(`light budget is ${config.pointBudget} point lights`);
   }
   let dim = 1;
+  let clockMs = 0;
+  const flareMs = new Map();
   let from = null;
   let goal = null;
   let blend = config.blendMs;
@@ -116,8 +118,16 @@ export function createLights(scene, config = LIGHTING) {
     points.forEach((light, index) => {
       const point = shown.points[index];
       const angelScale = point.angel ? angel : 1;
-      light.color.setHex(point.color);
-      light.intensity = point.intensity * angelScale * dim;
+      let color = point.color;
+      let intensity = point.intensity * angelScale;
+      if (point.brazier) {
+        const flare = flareMs.get(point.id) ?? 0;
+        const flicker = 0.82 + 0.18 * Math.sin(clockMs * 0.013 + index * 1.7);
+        color = flare > 0 ? 0x6e1208 : 0xff7a1a;
+        intensity = point.intensity * (flare > 0 ? 2.6 : flicker);
+      }
+      light.color.setHex(color);
+      light.intensity = intensity * dim;
       light.distance = point.distance;
       light.position.set(point.x, point.y, point.z);
     });
@@ -176,8 +186,19 @@ export function createLights(scene, config = LIGHTING) {
         point.z = prev.z + (next.z - prev.z) * t;
         point.distance = prev.distance + (next.distance - prev.distance) * t;
         point.angel = Boolean(next.angel);
+        point.brazier = Boolean(next.brazier);
+        point.id = next.id ?? '';
       });
+      clockMs += dtMs;
+      for (const [id, left] of flareMs) {
+        const nextLeft = left - dtMs;
+        if (nextLeft <= 0) flareMs.delete(id);
+        else flareMs.set(id, nextLeft);
+      }
       apply(angel);
+    },
+    flareBrazier(id) {
+      flareMs.set(id, 500);
     },
   };
 }

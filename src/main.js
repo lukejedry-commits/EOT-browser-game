@@ -12,6 +12,7 @@ import { loadRapier } from './physics/world.js';
 import { createRoute } from './scenes/route.js';
 import { createStressScene } from './scenes/stress.js';
 import { createMenus } from './ui/menus.js';
+import { createBrazierMenu } from './ui/brazier.js';
 import './style.css';
 
 const params = new URLSearchParams(location.search);
@@ -21,6 +22,8 @@ const camDebug = params.get('cam') === 'debug';
 const inputDebug = params.get('input') === '1';
 const tierQuery = Number(params.get('tiers'));
 const unlockedChargeTier = tierQuery === 2 || tierQuery === 3 ? tierQuery : 1;
+const orbQuery = Number(params.get('orbs'));
+const startingOrbs = Number.isFinite(orbQuery) && orbQuery > 0 ? Math.floor(orbQuery) : 0;
 
 const canvas = document.querySelector('#view');
 const ui = document.querySelector('#ui');
@@ -102,6 +105,10 @@ const loop = createLoop({
     const action = document.querySelector('#action-readout');
     if (action) action.textContent = sceneApi.actionText || '';
     if (inputDebug) paintInput(lastEvents);
+    if (mode === 'play' && sceneApi?.shopId) {
+      mode = 'brazier';
+      brazier.show(sceneApi.shopState());
+    }
     lastEvents = [];
   },
 });
@@ -159,7 +166,7 @@ async function play() {
     const R = await loadRapier();
     ensureRenderer();
     sceneApi?.dispose();
-    sceneApi = stressEnabled ? createStressScene(R) : createRoute(R, { camDebug, unlockedChargeTier });
+    sceneApi = stressEnabled ? createStressScene(R) : createRoute(R, { camDebug, unlockedChargeTier, startingOrbs });
     applySize();
     checkpoint.save(sceneApi.captureState());
     setMode('play');
@@ -198,6 +205,18 @@ function quit() {
   renderer?.clear();
   setMode('menu');
 }
+
+const brazier = createBrazierMenu(document.querySelector('#app'), {
+  onBuy(id) {
+    sceneApi?.purchase(id);
+    if (sceneApi?.shopState) brazier.show(sceneApi.shopState());
+  },
+  onClose() {
+    sceneApi?.closeShop();
+    brazier.hide();
+    if (mode === 'brazier') setMode('play');
+  },
+});
 
 const creditEntries = [];
 const menus = createMenus(ui, {
